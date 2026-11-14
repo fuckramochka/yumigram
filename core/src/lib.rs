@@ -71,10 +71,14 @@ pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeInit(
                 Err(_) => return 0,
             };
 
-            // Connect in background runtime
+            // Connect in background runtime and start updates if already authorized
             let tg_clone = tg.clone();
+            let db_clone = db.clone();
             rt.spawn(async move {
-                let _ = tg_clone.connect().await;
+                if tg_clone.connect().await.is_ok() && tg_clone.is_authorized().await {
+                    let (tx, _rx) = tokio::sync::broadcast::channel(100);
+                    let _ = tg_clone.start_updates_stream(db_clone, tx).await;
+                }
             });
 
             let app_state = AppState { db, ghost, agent, tg, rt };
@@ -135,11 +139,18 @@ pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeSignIn(
 
     let result = if let Some(state) = get_state() {
         let tg = state.tg.clone();
+        let db = state.db.clone();
         match state.rt.block_on(tg.sign_in(&code_str)) {
             Ok(status) => {
                 if status == "2FA_REQUIRED" {
                     "{\"success\":true,\"status\":\"2FA_REQUIRED\"}".to_string()
                 } else {
+                    // Start updates engine stream on successful login
+                    let tg_stream = tg.clone();
+                    state.rt.spawn(async move {
+                        let (tx, _rx) = tokio::sync::broadcast::channel(100);
+                        let _ = tg_stream.start_updates_stream(db, tx).await;
+                    });
                     format!("{{\"success\":true,\"status\":\"SUCCESS\",\"name\":\"{}\"}}", status)
                 }
             }
@@ -165,8 +176,17 @@ pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeCheckPa
 
     let result = if let Some(state) = get_state() {
         let tg = state.tg.clone();
+        let db = state.db.clone();
         match state.rt.block_on(tg.check_password(&pwd_str)) {
-            Ok(_) => "{\"success\":true}".to_string(),
+            Ok(_) => {
+                // Start updates stream on successful 2FA auth
+                let tg_stream = tg.clone();
+                state.rt.spawn(async move {
+                    let (tx, _rx) = tokio::sync::broadcast::channel(100);
+                    let _ = tg_stream.start_updates_stream(db, tx).await;
+                });
+                "{\"success\":true}".to_string()
+            }
             Err(e) => format!("{{\"success\":false,\"message\":\"{}\"}}", e),
         }
     } else {

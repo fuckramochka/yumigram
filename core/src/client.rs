@@ -1,13 +1,15 @@
 use grammers_client::client::{LoginToken, PasswordToken, SignInError};
 use grammers_client::Client;
-use grammers_mtsender::SenderPool;
+use grammers_mtsender::{SenderPool, UpdatesConfiguration};
 use grammers_session::storages::SqliteSession;
 use grammers_session::types::PeerRef;
+use grammers_session::updates::UpdatesLike;
 use crate::db::LocalDatabase;
 use crate::models::{ChatItem, MessageItem};
+use crate::updates::UpdatesEngine;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::{broadcast, mpsc, Mutex};
 
 pub const OFFICIAL_TELEGRAM_APP_ID: i32 = 6;
 pub const OFFICIAL_TELEGRAM_APP_HASH: &str = "eb06d4abfb49dc3eeb1aeb98ae0f581e";
@@ -17,6 +19,7 @@ pub struct TelegramManager {
     api_hash: String,
     session_file: String,
     client: Arc<Mutex<Option<Client>>>,
+    updates_rx: Arc<Mutex<Option<mpsc::Receiver<UpdatesLike>>>>,
     pending_login_token: Arc<Mutex<Option<LoginToken>>>,
     pending_password_token: Arc<Mutex<Option<PasswordToken>>>,
     peer_cache: Arc<Mutex<HashMap<i64, PeerRef>>>,
@@ -29,6 +32,7 @@ impl TelegramManager {
             api_hash: OFFICIAL_TELEGRAM_APP_HASH.to_string(),
             session_file,
             client: Arc::new(Mutex::new(None)),
+            updates_rx: Arc::new(Mutex::new(None)),
             pending_login_token: Arc::new(Mutex::new(None)),
             pending_password_token: Arc::new(Mutex::new(None)),
             peer_cache: Arc::new(Mutex::new(HashMap::new())),
@@ -36,13 +40,27 @@ impl TelegramManager {
     }
 
     /// Connects to real Telegram MTProto servers using official credentials
+    /// and actively drives the MTProto network I/O runner in a background task.
     pub async fn connect(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let session = Arc::new(SqliteSession::open(&self.session_file).await?);
-        let pool = SenderPool::new(session, self.api_id);
-        let client = Client::new(pool.handle);
+        let SenderPool {
+            runner,
+            handle,
+            updates,
+        } = SenderPool::new(session, self.api_id);
+        let client = Client::new(handle);
 
-        let mut lock = self.client.lock().await;
-        *lock = Some(client);
+        // Spawn runner in background tokio task to drive socket I/O & frame encryption
+        tokio::spawn(async move {
+            runner.run().await;
+        });
+
+        let mut client_lock = self.client.lock().await;
+        *client_lock = Some(client);
+
+        let mut updates_lock = self.updates_rx.lock().await;
+        *updates_lock = Some(updates);
+
         Ok(())
     }
 
@@ -53,6 +71,36 @@ impl TelegramManager {
         } else {
             false
         }
+    }
+
+    /// Starts real-time updates engine loop when authorized
+    pub async fn start_updates_stream(
+        &self,
+        db: Arc<LocalDatabase>,
+        tx_event: broadcast::Sender<String>,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let client = {
+            let lock = self.client.lock().await;
+            lock.as_ref().cloned().ok_or("Client not connected")?
+        };
+
+        let updates = {
+            let mut lock = self.updates_rx.lock().await;
+            lock.take()
+        };
+
+        if let Some(updates_chan) = updates {
+            let stream = client
+                .stream_updates(updates_chan, UpdatesConfiguration { catch_up: true })
+                .await?;
+            let engine = UpdatesEngine::new(db, tx_event);
+
+            tokio::spawn(async move {
+                engine.run_loop(stream).await;
+            });
+        }
+
+        Ok(())
     }
 
     /// Requests login code from Telegram servers for a phone number
@@ -131,6 +179,13 @@ impl TelegramManager {
             while let Some(dialog) = dialogs.next().await? {
                 let chat_id = dialog.peer.id().bot_api_dialog_id_unchecked();
                 let title = dialog.peer.name().unwrap_or("Без назви").to_string();
+                let username = dialog.peer.username().map(|u| u.to_string());
+                let chat_type = match &dialog.peer {
+                    grammers_client::peer::Peer::User(_) => "user",
+                    grammers_client::peer::Peer::Group(_) => "group",
+                    grammers_client::peer::Peer::Channel(_) => "channel",
+                    grammers_client::peer::Peer::Community(_) => "channel",
+                };
 
                 if let Ok(Some(peer_ref)) = dialog.peer.to_ref().await {
                     cache.insert(chat_id, peer_ref);
@@ -143,8 +198,8 @@ impl TelegramManager {
                 let item = ChatItem {
                     id: chat_id,
                     title,
-                    username: None,
-                    chat_type: "dialog".into(),
+                    username,
+                    chat_type: chat_type.into(),
                     unread_count: 0,
                     last_message_text: last_msg_text,
                     last_message_date: last_msg_date,

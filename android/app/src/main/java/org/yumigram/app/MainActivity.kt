@@ -31,9 +31,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Initialize Rust core database in app's internal files directory
+        // Initialize Rust core database and MTProto session in app's internal files directory
         val dbPath = "${filesDir.absolutePath}/yumigram.db"
-        YumigramBridge.nativeInit(dbPath)
+        val sessionPath = "${filesDir.absolutePath}/yumigram_session.session"
+        YumigramBridge.nativeInit(dbPath, sessionPath)
 
         setContent {
             YumigramTheme {

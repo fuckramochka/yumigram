@@ -81,7 +81,7 @@ object YumigramBridge {
     fun isNativeLoaded(): Boolean = isLoaded
 
     // JNI Native Declarations
-    external fun nativeInit(dbPath: String): Boolean
+    external fun nativeInit(dbPath: String, sessionPath: String): Boolean
     external fun nativeIsAuthorized(): Boolean
     external fun nativeRequestCode(phone: String): String
     external fun nativeSignIn(code: String): String
