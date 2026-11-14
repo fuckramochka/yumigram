@@ -16,3 +16,9 @@ core/target/
 *.db
 *.db-journal
 test_session.session
+
+# Target and local files
+target/
+.cargo/
+photo_*.jpg
+

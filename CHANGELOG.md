@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.0] — 2026-11-14
+
+### Added
+- **AI Agent Connector & Privacy Guard (Phase 5)**:
+  - Implemented `PrivacyGuard` in `core/src/ai.rs` providing regex sanitization of phone numbers, emails, credit cards, bearer tokens, secrets, and participants before transmission.
+  - Implemented Google Gemini REST API client and JSON response parser in Rust & Kotlin bridge.
+  - Added deterministic Local Semantic Extractor for 100% offline edge summarization (action items, topics, unresolved questions).
+  - Redesigned `AgentScreen.kt` with Material 3 Expressive UI, topics chips, action checkboxes, provider selector (Gemini vs Local), API key management, and AI Reply drafting with User Confirmation Dialog.
+  - Added SQLite `ai_settings` table for persisting AI provider, API keys, and privacy flags.
+- **Plugin SDK Architecture (Phase 4)**:
+  - Built `PluginManifest`, `PluginPermission` isolation, and `PluginRegistry` in `core/src/plugin.rs`.
+  - Added `on_outgoing_message` hooks pipeline before MTProto packet transmission.
+  - Implemented `PluginsScreen.kt` with active plugin toggles and permission chips.
+  - Created reference `AutoSignaturePlugin` and verified in unit tests.
+- **Multimedia & Core Hardening (Phase 3)**:
+  - Connected Coil 3 for async avatar and attachment loading with disk caching.
+  - Connected AndroidX Media3 ExoPlayer for voice message playback (`1x` / `1.5x` / `2x`).
+  - Fixed MTProto private chat `is_deleted = 1` resolution in SQLite database.
+  - Compiled optimized `aarch64-linux-android` release library (`libyumigram_core.so`, 5.1 MB).
+  - Added ProGuard rules (`proguard-rules.pro`) for JNI, Coil, and ExoPlayer.
+  - Configured GitHub Actions CI/CD workflow (`.github/workflows/build.yml`) for Rust tests and Android APK assembly.
+  - Full test suite passing: 12/12 Rust unit tests (100%).
+
 ## [0.3.0] — 2026-11-14
 
 ### Added

@@ -1843,6 +1843,7 @@ dependencies = [
  "grammers-tl-types",
  "jni",
  "log",
+ "regex",
  "rusqlite",
  "serde",
  "serde_json",

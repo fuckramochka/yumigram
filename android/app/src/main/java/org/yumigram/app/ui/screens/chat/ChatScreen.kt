@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import org.yumigram.app.bridge.ChatModel
 import org.yumigram.app.bridge.MessageModel
+import org.yumigram.app.bridge.YumigramBridge
 import org.yumigram.app.ui.components.MediaViewerDialog
 import org.yumigram.app.ui.components.VoiceMessageBubble
 import org.yumigram.app.ui.screens.settings.IndicatorStyle
@@ -252,6 +253,20 @@ fun MessageBubbleItem(
     onSwipeReply: () -> Unit,
     onMediaClick: (MessageModel) -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var localMediaPath by remember(message.media_path) { mutableStateOf(message.media_path) }
+
+    LaunchedEffect(message.id, message.media_path) {
+        if (localMediaPath.isNullOrEmpty() && (message.media_type == "photo" || message.media_type == "voice" || message.media_type == "audio")) {
+            val ext = if (message.media_type == "photo") "jpg" else "ogg"
+            val target = "${context.cacheDir.absolutePath}/media/${message.media_type}_${message.chat_id}_${message.id}.$ext"
+            val downloaded = YumigramBridge.downloadMedia(message.chat_id, message.id, target)
+            if (downloaded.isNotEmpty()) {
+                localMediaPath = downloaded
+            }
+        }
+    }
+
     var offsetX by remember { mutableFloatStateOf(0f) }
 
     Box(
@@ -329,16 +344,16 @@ fun MessageBubbleItem(
                 }
 
                 // Photo preview
-                if (message.media_type == "photo" && !message.media_path.isNullOrEmpty()) {
+                if (message.media_type == "photo" && !localMediaPath.isNullOrEmpty()) {
                     AsyncImage(
-                        model = message.media_path,
+                        model = localMediaPath,
                         contentDescription = "Photo Attachment",
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(180.dp)
                             .clip(RoundedCornerShape(12.dp))
-                            .clickable { onMediaClick(message) }
+                            .clickable { onMediaClick(message.copy(media_path = localMediaPath)) }
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                 }
@@ -346,7 +361,7 @@ fun MessageBubbleItem(
                 // Voice / Audio message player
                 if (message.media_type == "voice" || message.media_type == "audio") {
                     VoiceMessageBubble(
-                        mediaPath = message.media_path,
+                        mediaPath = localMediaPath,
                         durationSeconds = message.duration,
                         isOutgoing = message.is_outgoing
                     )

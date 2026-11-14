@@ -191,10 +191,17 @@ impl LocalDatabase {
     /// We mark `is_deleted = 1` so the user can still see what was deleted!
     pub fn mark_message_deleted(&self, chat_id: i64, message_id: i32) -> Result<()> {
         let conn = self.conn.lock().unwrap();
-        conn.execute(
-            "UPDATE messages SET is_deleted = 1 WHERE chat_id = ?1 AND id = ?2",
-            params![chat_id, message_id],
-        )?;
+        if chat_id != 0 {
+            conn.execute(
+                "UPDATE messages SET is_deleted = 1 WHERE chat_id = ?1 AND id = ?2",
+                params![chat_id, message_id],
+            )?;
+        } else {
+            conn.execute(
+                "UPDATE messages SET is_deleted = 1 WHERE id = ?1",
+                params![message_id],
+            )?;
+        }
         Ok(())
     }
 
@@ -247,6 +254,72 @@ impl LocalDatabase {
             msgs.push(msg?);
         }
         Ok(msgs)
+    }
+
+    pub fn search_messages(&self, query: &str, limit: i32) -> Result<Vec<MessageItem>> {
+        let conn = self.conn.lock().unwrap();
+        let pattern = format!("%{}%", query);
+        let mut stmt = conn.prepare(
+            "SELECT id, chat_id, sender_id, sender_name, text, date,
+                    is_outgoing, is_read, reply_to_id, is_deleted, original_text,
+                    media_type, media_path, duration
+             FROM messages 
+             WHERE text LIKE ?1
+             ORDER BY date DESC 
+             LIMIT ?2",
+        )?;
+
+        let msg_iter = stmt.query_map(params![pattern, limit], |row| {
+            Ok(MessageItem {
+                id: row.get(0)?,
+                chat_id: row.get(1)?,
+                sender_id: row.get(2)?,
+                sender_name: row.get(3)?,
+                text: row.get(4)?,
+                date: row.get(5)?,
+                is_outgoing: row.get::<_, i32>(6)? != 0,
+                is_read: row.get::<_, i32>(7)? != 0,
+                reply_to_id: row.get(8)?,
+                is_deleted: row.get::<_, i32>(9)? != 0,
+                original_text: row.get(10)?,
+                media_type: row.get(11)?,
+                media_path: row.get(12)?,
+                duration: row.get(13)?,
+            })
+        })?;
+
+        let mut msgs = Vec::new();
+        for msg in msg_iter {
+            msgs.push(msg?);
+        }
+        Ok(msgs)
+    }
+
+    pub fn get_chat_by_id(&self, chat_id: i64) -> Result<Option<ChatItem>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, title, username, chat_type, unread_count, 
+                    last_message_text, last_message_date, last_message_outgoing, 
+                    last_message_read, avatar_path
+             FROM chats WHERE id = ?1",
+        )?;
+        let mut rows = stmt.query(params![chat_id])?;
+        if let Some(row) = rows.next()? {
+            Ok(Some(ChatItem {
+                id: row.get(0)?,
+                title: row.get(1)?,
+                username: row.get(2)?,
+                chat_type: row.get(3)?,
+                unread_count: row.get(4)?,
+                last_message_text: row.get(5)?,
+                last_message_date: row.get(6)?,
+                last_message_outgoing: row.get::<_, i32>(7)? != 0,
+                last_message_read: row.get::<_, i32>(8)? != 0,
+                avatar_path: row.get(9)?,
+            }))
+        } else {
+            Ok(None)
+        }
     }
 
     pub fn set_setting(&self, key: &str, value: &str) -> Result<()> {

@@ -2,6 +2,7 @@ pub mod models;
 pub mod db;
 pub mod ghost;
 pub mod agent;
+pub mod ai;
 pub mod client;
 pub mod updates;
 pub mod plugins;
@@ -62,10 +63,10 @@ pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeInit(
     match LocalDatabase::new(&db_p) {
         Ok(db_inst) => {
             let db = Arc::new(db_inst);
-            let ghost = GhostManager::new(GhostConfig::default());
-            let agent = AgentExecutor::new(db.clone());
-            let plugins = Arc::new(PluginManager::new(db.clone()));
             let tg = Arc::new(TelegramManager::new(session_p));
+            let ghost = GhostManager::new(GhostConfig::default());
+            let agent = AgentExecutor::new(db.clone(), Some(tg.clone()));
+            let plugins = Arc::new(PluginManager::new(db.clone()));
 
             let rt = match tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
@@ -419,4 +420,59 @@ pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeSetPlug
     } else {
         0
     }
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeDownloadMedia(
+    mut env: JNIEnv,
+    _class: JClass,
+    chat_id: jlong,
+    message_id: jint,
+    target_path: JString,
+) -> jstring {
+    let path_str: String = match env.get_string(&target_path) {
+        Ok(s) => s.into(),
+        Err(_) => return env.new_string("").unwrap().into_raw(),
+    };
+
+    let result = if let Some(state) = get_state() {
+        match state.rt.block_on(state.tg.download_message_media(&state.db, chat_id, message_id, &path_str)) {
+            Ok(downloaded_path) => downloaded_path,
+            Err(e) => {
+                log::error!("nativeDownloadMedia failed: {}", e);
+                String::new()
+            }
+        }
+    } else {
+        String::new()
+    };
+
+    env.new_string(result).unwrap().into_raw()
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeDownloadChatAvatar(
+    mut env: JNIEnv,
+    _class: JClass,
+    chat_id: jlong,
+    target_path: JString,
+) -> jstring {
+    let path_str: String = match env.get_string(&target_path) {
+        Ok(s) => s.into(),
+        Err(_) => return env.new_string("").unwrap().into_raw(),
+    };
+
+    let result = if let Some(state) = get_state() {
+        match state.rt.block_on(state.tg.download_chat_avatar(&state.db, chat_id, &path_str)) {
+            Ok(avatar_path) => avatar_path,
+            Err(e) => {
+                log::error!("nativeDownloadChatAvatar failed: {}", e);
+                String::new()
+            }
+        }
+    } else {
+        String::new()
+    };
+
+    env.new_string(result).unwrap().into_raw()
 }

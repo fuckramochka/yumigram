@@ -5,6 +5,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import java.net.HttpURLConnection
+import java.net.URL
 
 @Serializable
 data class ChatModel(
@@ -43,7 +45,15 @@ data class AgentAction(
     val action_type: String,
     val chat_id: Long? = null,
     val text: String? = null,
-    val bio: String? = null
+    val bio: String? = null,
+    val first_name: String? = null,
+    val last_name: String? = null,
+    val query: String? = null,
+    val limit: Int? = null,
+    val api_key: String? = null,
+    val provider: String? = null,
+    val strict_privacy: Boolean? = null,
+    val raw_ai_response: String? = null
 )
 
 @Serializable
@@ -51,6 +61,35 @@ data class AgentResult(
     val success: Boolean,
     val message: String,
     val data: String? = null
+)
+
+@Serializable
+data class AgentChatSummary(
+    val id: Long,
+    val title: String,
+    val unread_count: Int,
+    val last_message: String? = null,
+    val chat_type: String = "user"
+)
+
+@Serializable
+data class AgentStructuredSummary(
+    val chat_title: String,
+    val total_messages: Int,
+    val participants: List<String> = emptyList(),
+    val key_topics: List<String> = emptyList(),
+    val unanswered_questions: List<String> = emptyList(),
+    val action_items: List<String> = emptyList(),
+    val summary_text: String,
+    val provider_used: String = "Local ONNX / Offline Privacy Engine",
+    val privacy_protected: Boolean = true
+)
+
+@Serializable
+data class AiSettingsModel(
+    val provider: String = "local",
+    val gemini_api_key: String = "",
+    val strict_privacy: Boolean = true
 )
 
 @Serializable
@@ -97,9 +136,6 @@ object YumigramBridge {
         }
     }
 
-    fun isNativeLoaded(): Boolean = isLoaded
-
-    // JNI Native Declarations
     external fun nativeInit(dbPath: String, sessionPath: String): Boolean
     external fun nativeIsAuthorized(): Boolean
     external fun nativeRequestCode(phone: String): String
@@ -116,6 +152,8 @@ object YumigramBridge {
     external fun nativeExecuteAgentAction(actionJson: String): String
     external fun nativeListPlugins(): String
     external fun nativeSetPluginEnabled(pluginId: String, enabled: Boolean): Boolean
+    external fun nativeDownloadMedia(chatId: Long, messageId: Int, targetPath: String): String
+    external fun nativeDownloadChatAvatar(chatId: Long, targetPath: String): String
 
     suspend fun listPlugins(): List<PluginStateModel> = withContext(Dispatchers.IO) {
         if (!isLoaded) return@withContext emptyList()
@@ -129,20 +167,12 @@ object YumigramBridge {
 
     suspend fun setPluginEnabled(pluginId: String, enabled: Boolean): Boolean = withContext(Dispatchers.IO) {
         if (!isLoaded) return@withContext false
-        try {
-            nativeSetPluginEnabled(pluginId, enabled)
-        } catch (_: Exception) {
-            false
-        }
+        nativeSetPluginEnabled(pluginId, enabled)
     }
 
     suspend fun isAuthorized(): Boolean = withContext(Dispatchers.IO) {
         if (!isLoaded) return@withContext false
-        try {
-            nativeIsAuthorized()
-        } catch (_: Exception) {
-            false
-        }
+        nativeIsAuthorized()
     }
 
     suspend fun requestCode(phone: String): AuthResponse = withContext(Dispatchers.IO) {
@@ -150,8 +180,8 @@ object YumigramBridge {
         val raw = nativeRequestCode(phone)
         try {
             json.decodeFromString<AuthResponse>(raw)
-        } catch (e: Exception) {
-            AuthResponse(false, message = "Error: ${e.message} (raw: $raw)")
+        } catch (_: Exception) {
+            AuthResponse(false, message = raw)
         }
     }
 
@@ -160,8 +190,8 @@ object YumigramBridge {
         val raw = nativeSignIn(code)
         try {
             json.decodeFromString<AuthResponse>(raw)
-        } catch (e: Exception) {
-            AuthResponse(false, message = "Error: ${e.message} (raw: $raw)")
+        } catch (_: Exception) {
+            AuthResponse(false, message = raw)
         }
     }
 
@@ -170,8 +200,8 @@ object YumigramBridge {
         val raw = nativeCheckPassword(password)
         try {
             json.decodeFromString<AuthResponse>(raw)
-        } catch (e: Exception) {
-            AuthResponse(false, message = "Error: ${e.message} (raw: $raw)")
+        } catch (_: Exception) {
+            AuthResponse(false, message = raw)
         }
     }
 
@@ -239,5 +269,179 @@ object YumigramBridge {
         } catch (e: Exception) {
             AgentResult(false, "Parse error: ${e.message}")
         }
+    }
+
+    suspend fun downloadMedia(chatId: Long, messageId: Int, targetPath: String): String = withContext(Dispatchers.IO) {
+        if (!isLoaded) return@withContext ""
+        try {
+            nativeDownloadMedia(chatId, messageId, targetPath)
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
+    suspend fun downloadChatAvatar(chatId: Long, targetPath: String): String = withContext(Dispatchers.IO) {
+        if (!isLoaded) return@withContext ""
+        try {
+            nativeDownloadChatAvatar(chatId, targetPath)
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
+    suspend fun listChatsForAgent(): List<AgentChatSummary> = withContext(Dispatchers.IO) {
+        val res = executeAgent(AgentAction(action_type = "list_chats"))
+        if (res.success && res.data != null) {
+            try {
+                json.decodeFromString<List<AgentChatSummary>>(res.data)
+            } catch (_: Exception) {
+                emptyList()
+            }
+        } else {
+            emptyList()
+        }
+    }
+
+    suspend fun getAiSettings(): AiSettingsModel = withContext(Dispatchers.IO) {
+        val res = executeAgent(AgentAction(action_type = "get_ai_settings"))
+        if (res.success && res.data != null) {
+            try {
+                json.decodeFromString<AiSettingsModel>(res.data)
+            } catch (_: Exception) {
+                AiSettingsModel()
+            }
+        } else {
+            AiSettingsModel()
+        }
+    }
+
+    suspend fun saveAiSettings(provider: String, apiKey: String, strictPrivacy: Boolean): Boolean = withContext(Dispatchers.IO) {
+        val res = executeAgent(
+            AgentAction(
+                action_type = "set_ai_settings",
+                provider = provider,
+                api_key = apiKey,
+                strict_privacy = strictPrivacy
+            )
+        )
+        res.success
+    }
+
+    suspend fun callGeminiApi(apiKey: String, payloadJson: String): String = withContext(Dispatchers.IO) {
+        try {
+            val url = URL("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+            conn.connectTimeout = 15000
+            conn.readTimeout = 25000
+            conn.doOutput = true
+            conn.outputStream.use { os ->
+                os.write(payloadJson.toByteArray(Charsets.UTF_8))
+            }
+            val respCode = conn.responseCode
+            val stream = if (respCode in 200..299) conn.inputStream else conn.errorStream
+            val responseText = stream.bufferedReader().use { it.readText() }
+            responseText
+        } catch (e: Exception) {
+            """{"error":{"message":"${e.message ?: "Network error"}"}}"""
+        }
+    }
+
+    suspend fun summarizeChatSmart(chatId: Long?): AgentStructuredSummary = withContext(Dispatchers.IO) {
+        val settings = getAiSettings()
+
+        // 1. If Google Gemini is configured, use it with privacy sanitization
+        if (settings.provider == "gemini" && settings.gemini_api_key.isNotBlank()) {
+            val prep = executeAgent(
+                AgentAction(
+                    action_type = "prepare_ai_summary",
+                    chat_id = chatId,
+                    strict_privacy = settings.strict_privacy
+                )
+            )
+            if (prep.success && !prep.data.isNullOrBlank()) {
+                val rawResponse = callGeminiApi(settings.gemini_api_key, prep.data)
+                val parsed = executeAgent(
+                    AgentAction(
+                        action_type = "parse_ai_summary",
+                        chat_id = chatId,
+                        raw_ai_response = rawResponse
+                    )
+                )
+                if (parsed.success && !parsed.data.isNullOrBlank()) {
+                    try {
+                        return@withContext json.decodeFromString<AgentStructuredSummary>(parsed.data)
+                    } catch (_: Exception) {}
+                }
+            }
+        }
+
+        // 2. Local ONNX / Offline Privacy Engine fallback (100% on-device)
+        val localRes = executeAgent(
+            AgentAction(
+                action_type = "summarize",
+                chat_id = chatId,
+                provider = "local_onnx",
+                strict_privacy = settings.strict_privacy
+            )
+        )
+        if (localRes.success && !localRes.data.isNullOrBlank()) {
+            try {
+                return@withContext json.decodeFromString<AgentStructuredSummary>(localRes.data)
+            } catch (_: Exception) {}
+        }
+
+        AgentStructuredSummary(
+            chat_title = "Діалог",
+            total_messages = 0,
+            summary_text = localRes.message
+        )
+    }
+
+    suspend fun draftReply(chatId: Long, instruction: String? = null): AgentResult = withContext(Dispatchers.IO) {
+        val settings = getAiSettings()
+        if (settings.provider == "gemini" && settings.gemini_api_key.isNotBlank()) {
+            // Contextual draft with Gemini
+            val res = executeAgent(
+                AgentAction(
+                    action_type = "draft_reply",
+                    chat_id = chatId,
+                    text = instruction,
+                    provider = "gemini",
+                    api_key = settings.gemini_api_key
+                )
+            )
+            return@withContext res
+        }
+        executeAgent(AgentAction(action_type = "draft_reply", chat_id = chatId, text = instruction))
+    }
+
+    suspend fun searchMessages(query: String): List<MessageModel> = withContext(Dispatchers.IO) {
+        val res = executeAgent(AgentAction(action_type = "search_messages", query = query))
+        if (res.success && res.data != null) {
+            try {
+                json.decodeFromString<List<MessageModel>>(res.data)
+            } catch (_: Exception) {
+                emptyList()
+            }
+        } else {
+            emptyList()
+        }
+    }
+
+    suspend fun updateProfile(firstName: String?, lastName: String?, bio: String?): AgentResult = withContext(Dispatchers.IO) {
+        executeAgent(
+            AgentAction(
+                action_type = "update_profile",
+                first_name = firstName,
+                last_name = lastName,
+                bio = bio
+            )
+        )
+    }
+
+    suspend fun sendAgentMessage(chatId: Long, text: String): AgentResult = withContext(Dispatchers.IO) {
+        executeAgent(AgentAction(action_type = "send_message", chat_id = chatId, text = text))
     }
 }

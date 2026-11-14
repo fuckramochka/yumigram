@@ -8,6 +8,7 @@ use crate::db::LocalDatabase;
 use crate::models::{ChatItem, MessageItem};
 use crate::updates::UpdatesEngine;
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc, Mutex};
 
@@ -314,6 +315,87 @@ impl TelegramManager {
             Ok(item)
         } else {
             Err("Не знайдено дескриптор чату для відправки".into())
+        }
+    }
+
+    /// Downloads media attached to a message and stores it at target_path
+    pub async fn download_message_media(
+        &self,
+        db: &LocalDatabase,
+        chat_id: i64,
+        message_id: i32,
+        target_path: &str,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        let client_lock = self.client.lock().await;
+        let cache = self.peer_cache.lock().await;
+
+        if let (Some(client), Some(&peer_ref)) = (client_lock.as_ref(), cache.get(&chat_id)) {
+            let messages = client.get_messages_by_id(peer_ref, &[message_id]).await?;
+            if let Some(Some(msg)) = messages.into_iter().next() {
+                if let Some(media) = msg.media() {
+                    if let Some(parent) = Path::new(target_path).parent() {
+                        let _ = tokio::fs::create_dir_all(parent).await;
+                    }
+                    client.download_media(&media, target_path).await?;
+                    let _ = db.update_message_media_path(chat_id, message_id, target_path);
+                    Ok(target_path.to_string())
+                } else {
+                    Err("Повідомлення не містить завантажуваного медіа".into())
+                }
+            } else {
+                Err("Повідомлення не знайдено на серверах Telegram".into())
+            }
+        } else {
+            Err("Не знайдено дескриптор чату в кеші".into())
+        }
+    }
+
+    /// Downloads chat avatar (profile photo) and stores it at target_path
+    pub async fn download_chat_avatar(
+        &self,
+        db: &LocalDatabase,
+        chat_id: i64,
+        target_path: &str,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        let client_lock = self.client.lock().await;
+        let cache = self.peer_cache.lock().await;
+
+        if let (Some(client), Some(&peer_ref)) = (client_lock.as_ref(), cache.get(&chat_id)) {
+            let peer = client.resolve_peer(peer_ref).await?;
+            if let Some(photo) = peer.photo(false).await? {
+                if let Some(parent) = Path::new(target_path).parent() {
+                    let _ = tokio::fs::create_dir_all(parent).await;
+                }
+                client.download_media(&photo, target_path).await?;
+                let _ = db.update_chat_avatar_path(chat_id, target_path);
+                Ok(target_path.to_string())
+            } else {
+                Err("У чату немає фотографії профілю".into())
+            }
+        } else {
+            Err("Не знайдено дескриптор чату в кеші".into())
+        }
+    }
+
+    /// Updates current user profile on Telegram MTProto servers
+    pub async fn update_profile(
+        &self,
+        first_name: Option<String>,
+        last_name: Option<String>,
+        about: Option<String>,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let client_lock = self.client.lock().await;
+        if let Some(client) = client_lock.as_ref() {
+            client
+                .invoke(&grammers_tl_types::functions::account::UpdateProfile {
+                    first_name,
+                    last_name,
+                    about,
+                })
+                .await?;
+            Ok(())
+        } else {
+            Err("Клієнт не підключений до серверів Telegram".into())
         }
     }
 }

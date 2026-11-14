@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.layout.ContentScale
 import coil.compose.AsyncImage
 import org.yumigram.app.bridge.ChatModel
+import org.yumigram.app.bridge.YumigramBridge
 import org.yumigram.app.ui.screens.settings.IndicatorStyle
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -208,6 +209,19 @@ fun ChatItemRow(
     indicatorStyle: IndicatorStyle,
     onClick: () -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var avatarPath by remember(chat.avatar_path) { mutableStateOf(chat.avatar_path) }
+
+    LaunchedEffect(chat.id) {
+        if (avatarPath.isNullOrEmpty()) {
+            val target = "${context.cacheDir.absolutePath}/avatars/chat_${chat.id}.jpg"
+            val downloaded = YumigramBridge.downloadChatAvatar(chat.id, target)
+            if (downloaded.isNotEmpty()) {
+                avatarPath = downloaded
+            }
+        }
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -216,9 +230,9 @@ fun ChatItemRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         // Avatar with Coil AsyncImage and initials fallback
-        if (!chat.avatar_path.isNullOrEmpty()) {
+        if (!avatarPath.isNullOrEmpty()) {
             AsyncImage(
-                model = chat.avatar_path,
+                model = avatarPath,
                 contentDescription = chat.title,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
