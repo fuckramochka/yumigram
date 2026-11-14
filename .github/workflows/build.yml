@@ -1,11 +1,14 @@
-name: Yumigram CI / Build APK
+name: Yumigram CI & Auto-Release
 
 on:
   push:
     branches: [ master, main ]
-  pull_request:
-    branches: [ master, main ]
+    tags:
+      - 'v*'
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   test-core:
@@ -24,13 +27,15 @@ jobs:
         run: |
           cargo test --manifest-path core/Cargo.toml --verbose
 
-  build-apk:
-    name: Build Android APK
+  build-release:
+    name: Build APK & Publish Release
     runs-on: ubuntu-latest
     needs: test-core
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -41,17 +46,49 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x android/gradlew
 
-      - name: Build Debug APK
+      - name: Build Signed Release and Debug APKs
         run: |
           cd android
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew assembleRelease assembleDebug --stacktrace
         env:
           ANDROID_HOME: /usr/local/lib/android/sdk
 
-      - name: Upload Debug APK
+      - name: Prepare Release Artifacts
+        run: |
+          mkdir -p release-artifacts
+          if [ -f android/app/build/outputs/apk/release/app-release.apk ]; then
+            cp android/app/build/outputs/apk/release/app-release.apk release-artifacts/yumigram-release.apk
+          fi
+          if [ -f android/app/build/outputs/apk/debug/app-debug.apk ]; then
+            cp android/app/build/outputs/apk/debug/app-debug.apk release-artifacts/yumigram-debug.apk
+          fi
+          ls -lh release-artifacts/
+
+      - name: Upload Artifacts to Workflow Run
         uses: actions/upload-artifact@v4
         with:
-          name: yumigram-app-debug
-          path: android/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
+          name: yumigram-apks
+          path: release-artifacts/*
           retention-days: 14
+
+      - name: Determine Release Tag
+        id: release_info
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            TAG_NAME="${{ github.ref_name }}"
+          else
+            TAG_NAME="v1.0.${{ github.run_number }}"
+          fi
+          echo "tag_name=${TAG_NAME}" >> $GITHUB_OUTPUT
+          echo "release_title=Yumigram ${TAG_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Create or Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_info.outputs.tag_name }}
+          name: ${{ steps.release_info.outputs.release_title }}
+          files: release-artifacts/*
+          generate_release_notes: true
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

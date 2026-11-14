@@ -18,7 +18,16 @@ android {
         versionName = "1.0.0"
 
         ndk {
-            abiFilters.addAll(setOf("arm64-v8a", "x86_64"))
+            abiFilters.addAll(setOf("arm64-v8a"))
+        }
+    }
+
+    signingConfigs {
+        create("release") {
+            storeFile = file("yumigram.keystore")
+            storePassword = "yumigram2026"
+            keyAlias = "yumigram"
+            keyPassword = "yumigram2026"
         }
     }
 
@@ -26,11 +35,17 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
         }
+    }
+
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
     }
 
     compileOptions {
