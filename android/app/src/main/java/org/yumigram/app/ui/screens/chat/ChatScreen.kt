@@ -258,11 +258,15 @@ fun MessageBubbleItem(
 
     LaunchedEffect(message.id, message.media_path) {
         if (localMediaPath.isNullOrEmpty() && (message.media_type == "photo" || message.media_type == "voice" || message.media_type == "audio")) {
-            val ext = if (message.media_type == "photo") "jpg" else "ogg"
-            val target = "${context.cacheDir.absolutePath}/media/${message.media_type}_${message.chat_id}_${message.id}.$ext"
-            val downloaded = YumigramBridge.downloadMedia(message.chat_id, message.id, target)
-            if (downloaded.isNotEmpty()) {
-                localMediaPath = downloaded
+            try {
+                val ext = if (message.media_type == "photo") "jpg" else "ogg"
+                val target = "${context.cacheDir.absolutePath}/media/${message.media_type}_${message.chat_id}_${message.id}.$ext"
+                val downloaded = YumigramBridge.downloadMedia(message.chat_id, message.id, target)
+                if (downloaded.isNotEmpty()) {
+                    localMediaPath = downloaded
+                }
+            } catch (e: Throwable) {
+                android.util.Log.e("Yumigram", "downloadMedia error", e)
             }
         }
     }

@@ -214,10 +214,14 @@ fun ChatItemRow(
 
     LaunchedEffect(chat.id) {
         if (avatarPath.isNullOrEmpty()) {
-            val target = "${context.cacheDir.absolutePath}/avatars/chat_${chat.id}.jpg"
-            val downloaded = YumigramBridge.downloadChatAvatar(chat.id, target)
-            if (downloaded.isNotEmpty()) {
-                avatarPath = downloaded
+            try {
+                val target = "${context.cacheDir.absolutePath}/avatars/chat_${chat.id}.jpg"
+                val downloaded = YumigramBridge.downloadChatAvatar(chat.id, target)
+                if (downloaded.isNotEmpty()) {
+                    avatarPath = downloaded
+                }
+            } catch (e: Throwable) {
+                android.util.Log.e("Yumigram", "downloadChatAvatar error", e)
             }
         }
     }

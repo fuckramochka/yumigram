@@ -1,25 +1,28 @@
 # Yumigram Proguard & R8 Rules
 
-# Preserve all native JNI methods in YumigramBridge
--keepclasseswithmembernames class org.yumigram.app.bridge.YumigramBridge {
-    native <methods>;
-}
+-dontobfuscate
+-keepattributes *Annotation*,InnerClasses,Signature,EnclosingMethod
 
-# Preserve serialization models for JNI JSON boundary
--keep class org.yumigram.app.bridge.** { *; }
--keepclassmembers class org.yumigram.app.bridge.** {
+# Preserve all Yumigram classes and members
+-keep class org.yumigram.app.** { *; }
+-keepclassmembers class org.yumigram.app.** { *; }
+
+# Preserve Kotlinx Serialization
+-keepclassmembers class * {
     *** Companion;
     *** serializer();
 }
-
-# Kotlinx Serialization
--keepattributes *Annotation*,InnerClasses,Signature
 -dontwarn kotlinx.serialization.**
 
+# Preserve Compose Runtime, UI & Icons
+-keep class androidx.compose.** { *; }
+-dontwarn androidx.compose.**
+-keep class androidx.compose.material.icons.** { *; }
+
 # AndroidX Media3 ExoPlayer
--keep class androidx.media3.exoplayer.** { *; }
+-keep class androidx.media3.** { *; }
 -dontwarn androidx.media3.**
 
 # Coil Image Loader
--dontwarn coil.**
 -keep class coil.** { *; }
+-dontwarn coil.**

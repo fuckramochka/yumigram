@@ -31,7 +31,10 @@ struct AppState {
 static STATE: OnceLock<Mutex<AppState>> = OnceLock::new();
 
 fn get_state() -> Option<std::sync::MutexGuard<'static, AppState>> {
-    STATE.get().map(|m| m.lock().unwrap())
+    STATE.get().and_then(|m| match m.lock() {
+        Ok(guard) => Some(guard),
+        Err(poisoned) => Some(poisoned.into_inner()),
+    })
 }
 
 #[unsafe(no_mangle)]

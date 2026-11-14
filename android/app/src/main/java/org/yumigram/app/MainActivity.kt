@@ -32,10 +32,22 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Initialize Rust core database and MTProto session in app's internal files directory
-        val dbPath = "${filesDir.absolutePath}/yumigram.db"
-        val sessionPath = "${filesDir.absolutePath}/yumigram_session.session"
-        YumigramBridge.nativeInit(dbPath, sessionPath)
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            android.util.Log.e("YumigramCrash", "Fatal exception in thread ${thread.name}", throwable)
+            try {
+                val crashFile = java.io.File(filesDir, "last_crash.txt")
+                crashFile.writeText(throwable.stackTraceToString())
+            } catch (_: Exception) {}
+        }
+
+        try {
+            // Initialize Rust core database and MTProto session in app's internal files directory
+            val dbPath = "${filesDir.absolutePath}/yumigram.db"
+            val sessionPath = "${filesDir.absolutePath}/yumigram_session.session"
+            YumigramBridge.nativeInit(dbPath, sessionPath)
+        } catch (e: Throwable) {
+            android.util.Log.e("Yumigram", "nativeInit failed", e)
+        }
 
         setContent {
             YumigramTheme {
@@ -51,8 +63,13 @@ fun RootNavigationContainer() {
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
-        val authorized = YumigramBridge.isAuthorized()
-        isAuthorized = authorized
+        try {
+            val authorized = YumigramBridge.isAuthorized()
+            isAuthorized = authorized
+        } catch (e: Throwable) {
+            android.util.Log.e("Yumigram", "isAuthorized check failed", e)
+            isAuthorized = false
+        }
     }
 
     when (isAuthorized) {
@@ -116,17 +133,22 @@ fun MainAppContainer(
     fun refreshChats() {
         isRefreshing = true
         scope.launch {
-            // First load from local SQLite cache
-            val cached = YumigramBridge.getChats()
-            if (cached.isNotEmpty()) {
-                chats = cached
+            try {
+                // First load from local SQLite cache
+                val cached = YumigramBridge.getChats()
+                if (cached.isNotEmpty()) {
+                    chats = cached
+                }
+                // Then fetch live from Telegram MTProto
+                val live = YumigramBridge.fetchLiveChats(30)
+                if (live.isNotEmpty()) {
+                    chats = live
+                }
+            } catch (e: Throwable) {
+                android.util.Log.e("Yumigram", "refreshChats error", e)
+            } finally {
+                isRefreshing = false
             }
-            // Then fetch live from Telegram MTProto
-            val live = YumigramBridge.fetchLiveChats(30)
-            if (live.isNotEmpty()) {
-                chats = live
-            }
-            isRefreshing = false
         }
     }
 
@@ -137,14 +159,18 @@ fun MainAppContainer(
     // When chat is selected, load messages
     LaunchedEffect(selectedChat?.id) {
         selectedChat?.let { chat ->
-            // Load from SQLite cache
-            val cachedMsgs = YumigramBridge.getMessages(chat.id, 50, 0)
-            messages = cachedMsgs
+            try {
+                // Load from SQLite cache
+                val cachedMsgs = YumigramBridge.getMessages(chat.id, 50, 0)
+                messages = cachedMsgs
 
-            // Concurrently fetch live messages from MTProto
-            val liveMsgs = YumigramBridge.fetchLiveMessages(chat.id, 50)
-            if (liveMsgs.isNotEmpty()) {
-                messages = liveMsgs
+                // Concurrently fetch live messages from MTProto
+                val liveMsgs = YumigramBridge.fetchLiveMessages(chat.id, 50)
+                if (liveMsgs.isNotEmpty()) {
+                    messages = liveMsgs
+                }
+            } catch (e: Throwable) {
+                android.util.Log.e("Yumigram", "loadMessages error", e)
             }
         }
     }
