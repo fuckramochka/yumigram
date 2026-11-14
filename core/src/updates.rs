@@ -1,6 +1,7 @@
 use crate::db::LocalDatabase;
 use crate::models::{ChatItem, MessageItem};
 use grammers_client::client::UpdateStream;
+use grammers_client::media::Media;
 use grammers_client::update::Update;
 use std::sync::Arc;
 use tokio::sync::broadcast;
@@ -25,6 +26,21 @@ impl UpdatesEngine {
                     let sender_id = msg.sender_id().map(|p| p.bot_api_dialog_id_unchecked()).unwrap_or(0);
                     let sender_name = msg.sender().and_then(|p| p.name()).unwrap_or("Unknown").to_string();
 
+                    let (media_type, duration) = match msg.media() {
+                        Some(Media::Photo(_)) => (Some("photo".to_string()), None),
+                        Some(Media::Document(ref doc)) => {
+                            let mime = doc.mime_type().unwrap_or("");
+                            if mime.starts_with("audio/") || mime.contains("ogg") {
+                                (Some("voice".to_string()), None)
+                            } else if mime.starts_with("video/") {
+                                (Some("video".to_string()), None)
+                            } else {
+                                (Some("file".to_string()), None)
+                            }
+                        }
+                        _ => (None, None),
+                    };
+
                     let item = MessageItem {
                         id: msg.id(),
                         chat_id,
@@ -37,7 +53,9 @@ impl UpdatesEngine {
                         reply_to_id: None,
                         is_deleted: false,
                         original_text: None,
-                        media_type: None,
+                        media_type,
+                        media_path: None,
+                        duration,
                     };
 
                     let _ = self.db.save_message(&item);

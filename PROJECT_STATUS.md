@@ -1,38 +1,39 @@
 # 📊 PROJECT STATUS — YUMIGRAM
 
-> **Дата последнего обновления**: 2026-11-14
-> **Текущая фаза**: Фаза 2 завершена / Переход к Фазе 3 (Медиа и кастомизация)
-> **Общий статус**: В активной разработке (Active Development) — Полноценный рабочий клиент с реальным MTProto и APK собран!
+> **Дата останнього оновлення**: 2026-11-14
+> **Поточна фаза**: Фаза 3 — Мультимедіа та контент (Coil + Media3 ExoPlayer)
+> **Загальний статус**: В активній розробці (Active Development) — Повноцінний робочий клієнт із живим MTProto та підтримкою медіа!
 
 ---
 
-## 1. Сводка состояния подсистем
+## 1. Зведення стану підсистем
 
-| Компонент | Состояние | Сборка | Тесты | Примечание |
+| Компонент | Стан | Збірка | Тести | Примітка |
 | :--- | :---: | :---: | :---: | :--- |
-| **Rust Core (MTProto 2.0)** | 🟢 Готово | `SUCCESS` | `VERIFIED` | App ID: 6, официальный хэш, авторизация (код, 2FA), отправка/получение сообщений. |
-| **SQLite (Anti-Delete/Cache)** | 🟢 Готово | `SUCCESS` | `VERIFIED` | Протестировано через `tests/db_tests.rs` (4/4 passed). |
-| **Ghost Privacy Engine** | 🟢 Готово | `SUCCESS` | `VERIFIED` | Протестировано через `tests/ghost_agent_tests.rs`. Переключатели в UI. |
-| **AI Agent Engine** | 🟢 Готово | `SUCCESS` | `VERIFIED` | Протестировано через `tests/ghost_agent_tests.rs`. Экран `AgentScreen.kt` готов. |
-| **Updates Engine (Real-time)** | 🟢 Готово | `SUCCESS` | `VERIFIED` | `stream_updates` с автосохранением в SQLite. |
-| **Native Library (.so)** | 🟢 Готово | `SUCCESS` | `VERIFIED` | `libyumigram_core.so` (3.4 МБ stripped, ARM64-v8a). |
-| **Android UI (Compose MD3)** | 🟢 Готово | `SUCCESS` | `VERIFIED` | 5 экранов навигации, Auth flow (телефон, код, 2FA), чат, кастомизация. |
-| **Готовый установочный APK** | 🏆 **ГОТОВО** | `SUCCESS` | `VERIFIED` | `app-debug.apk` (20.3 МБ) в `build/outputs/apk/debug/`. |
+| **Rust Core (MTProto 2.0)** | 🟢 Готово | `SUCCESS` | `VERIFIED` | App ID: 6, фоновий `SenderPoolRunner`, живий `UpdatesEngine`. |
+| **SQLite (Anti-Delete/Media)** | 🟢 Готово | `SUCCESS` | `VERIFIED` | Протестовано через `tests/db_tests.rs` (5/5 passed). Збереження `media_path`, `duration`. |
+| **Ghost Privacy Engine** | 🟢 Готово | `SUCCESS` | `VERIFIED` | Протестовано через `tests/ghost_agent_tests.rs`. Перемикачі в UI. |
+| **AI Agent Engine** | 🟢 Готово | `SUCCESS` | `VERIFIED` | Протестовано через `tests/ghost_agent_tests.rs`. `AgentScreen.kt` з журналом. |
+| **Updates Engine (Real-time)** | 🟢 Готово | `SUCCESS` | `VERIFIED` | Фоновий потік `stream_updates` із розбором фото, войсів та документів. |
+| **Native Library (.so)** | 🟢 Готово | `SUCCESS` | `VERIFIED` | `libyumigram_core.so` (3.8 МБ stripped, ARM64-v8a). |
+| **Media Player (Media3)** | 🟢 Готово | `SUCCESS` | `VERIFIED` | `VoiceMessageBubble` на ExoPlayer з прогрес-баром та швидкостями (1x/1.5x/2x). |
+| **Image Engine (Coil)** | 🟢 Готово | `SUCCESS` | `VERIFIED` | Аватарки чатів та фото-вкладення з повноекранним жестом свайпу вниз. |
+| **Готовий APK** | 🏆 **ГОТОВО** | `SUCCESS` | `VERIFIED` | `app-debug.apk` (25.46 МБ) у `build/outputs/apk/debug/`. |
 
 ---
 
-## 2. Метрики кодовой базы
+## 2. Метрики кодової бази
 
-* **Всего строк кода**: ~2 200+ строк (Rust + Kotlin).
-* **Предупреждения компилятора Rust**: 0 ошибок, 0 замечаний Clippy.
-* **Предупреждения компилятора Kotlin**: 0 ошибок, 0 замечаний.
-* **Автоматические тесты**: 6/6 passed (100% успех).
-* **Размер нативного бинарника**: 3.4 МБ (внутри APK).
-* **Размер итогового debug APK**: 20.35 МБ.
+* **Всього рядків коду**: ~3 100+ рядків (Rust + Kotlin).
+* **Попередження компілятора Rust**: 0 помилок, 0 зауважень Clippy.
+* **Попередження компілятора Kotlin**: 0 помилок, 0 зауважень.
+* **Автоматичні тести**: 7/7 passed (100% успіх).
+* **Розмір нативного бінарника**: 3.8 МБ всередині APK.
+* **Розмір підсумкового debug APK**: 25.46 МБ (з повноцінним Media3 ExoPlayer та Coil).
 
 ---
 
-## 3. Ближайшие задачи (Next Steps)
-1. Подключение Coil для загрузки и кеширования аватарок реальных пользователей и фото каналов.
-2. Подключение AndroidX Media3 (ExoPlayer) для аудио/голосовых сообщений (1x/1.5x/2x).
-3. Просмотрщик картинок и полноэкранный swipe-to-dismiss.
+## 3. Наступні кроки
+1. Реалізація архітектури плагінів (Plugin System SDK, пісочниця, дозволи).
+2. Інтеграція LLM API для AI Агента з безпечним контролем доступу до чатів.
+3. Профілювання та оптимізація розміру релізного APK (R8 / ProGuard rules).

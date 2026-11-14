@@ -20,6 +20,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import org.yumigram.app.bridge.ChatModel
 import org.yumigram.app.ui.screens.settings.IndicatorStyle
 import java.text.SimpleDateFormat
@@ -213,21 +215,32 @@ fun ChatItemRow(
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Avatar with initials fallback
-        Box(
-            modifier = Modifier
-                .size(54.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primaryContainer),
-            contentAlignment = Alignment.Center
-        ) {
-            val initial = chat.title.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
-            Text(
-                text = initial,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold
+        // Avatar with Coil AsyncImage and initials fallback
+        if (!chat.avatar_path.isNullOrEmpty()) {
+            AsyncImage(
+                model = chat.avatar_path,
+                contentDescription = chat.title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(54.dp)
+                    .clip(CircleShape)
             )
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(54.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                val initial = chat.title.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
+                Text(
+                    text = initial,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
 
         Spacer(modifier = Modifier.width(14.dp))

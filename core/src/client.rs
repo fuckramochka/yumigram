@@ -236,6 +236,21 @@ impl TelegramManager {
             let mut result = Vec::new();
 
             while let Some(msg) = iter.next().await? {
+                let (media_type, duration) = match msg.media() {
+                    Some(grammers_client::media::Media::Photo(_)) => (Some("photo".to_string()), None),
+                    Some(grammers_client::media::Media::Document(ref doc)) => {
+                        let mime = doc.mime_type().unwrap_or("");
+                        if mime.starts_with("audio/") || mime.contains("ogg") {
+                            (Some("voice".to_string()), None)
+                        } else if mime.starts_with("video/") {
+                            (Some("video".to_string()), None)
+                        } else {
+                            (Some("file".to_string()), None)
+                        }
+                    }
+                    _ => (None, None),
+                };
+
                 let item = MessageItem {
                     id: msg.id(),
                     chat_id,
@@ -248,7 +263,9 @@ impl TelegramManager {
                     reply_to_id: None,
                     is_deleted: false,
                     original_text: None,
-                    media_type: None,
+                    media_type,
+                    media_path: None,
+                    duration,
                 };
 
                 let _ = db.save_message(&item);
@@ -290,6 +307,8 @@ impl TelegramManager {
                 is_deleted: false,
                 original_text: None,
                 media_type: None,
+                media_path: None,
+                duration: None,
             };
             let _ = db.save_message(&item);
             Ok(item)

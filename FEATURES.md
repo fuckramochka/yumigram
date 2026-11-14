@@ -1,73 +1,65 @@
 # 📋 FEATURES MATRIX & STATUS TRACKER — YUMIGRAM
 
-> **Статусы**:
-> * `NOT STARTED` — Запланировано в бэклоге.
-> * `RESEARCHING` — Изучение протокола TL / API Telegram.
-> * `IN PROGRESS` — В активной разработке.
-> * `IMPLEMENTED` — Код написан.
-> * `TESTING` — Проходит автоматизированное тестирование.
-> * `VERIFIED` — Проверено на реальных данных / тестах.
-> * `BLOCKED` — Заблокировано внешней зависимостью.
+> **Статуси**:
+> * `PLANNED` — Заплановано в беклозі.
+> * `IN_PROGRESS` — В активній розробці.
+> * `IMPLEMENTED` — Код написано.
+> * `TESTED` — Проходить автоматизоване тестування.
+> * `VERIFIED` — Підтверджено реальними тестами / збіркою.
 
 ---
 
-## 1. Авторизация и ядро (Rust Core + MTProto)
+## 1. Авторизація та ядро (Rust Core + MTProto)
 
-| Функция | Модуль | Статус | Примечание |
+| Функція | Модуль | Статус | Примітка |
 | :--- | :--- | :---: | :--- |
-| Подключение к MTProto 2.0 | `core/src/client.rs` | `VERIFIED` | Официальные ключи Telegram: App ID 6, официальный хэш. |
-| Запрос кода по номеру телефона | `core/src/client.rs` | `VERIFIED` | Метод `request_login_code` связан через JNI с `AuthScreen.kt`. |
-| Вход по SMS / Telegram-коду | `core/src/client.rs` | `VERIFIED` | Метод `sign_in` связан через JNI с автопереходом. |
-| Поддержка 2FA хлауд-пароля | `core/src/client.rs` | `VERIFIED` | Метод `check_password` при статусе `2FA_REQUIRED`. |
-| Сессия сессий в SQLite | `core/src/client.rs` | `VERIFIED` | Используется `SqliteSession` из `grammers-session`. |
-| **Updates Engine (Живые обновления)**| `core/src/updates.rs`| `VERIFIED` | `stream_updates` с автосохранением в SQLite. |
-| Загрузка живых чатов (MTProto) | `core/src/client.rs` | `VERIFIED` | Метод `fetch_dialogs` связан через JNI с `ChatListScreen.kt`. |
-| Загрузка живых сообщений (MTProto) | `core/src/client.rs` | `VERIFIED` | Метод `fetch_messages` связан через JNI с `ChatScreen.kt`. |
-| Отправка живых сообщений (MTProto) | `core/src/client.rs` | `VERIFIED` | Метод `send_message` связан через JNI с отправкой в `ChatScreen.kt`. |
+| Підключення до MTProto 2.0 | `core/src/client.rs` | `VERIFIED` | Офіційні ключі: App ID 6, офіційний хеш Telegram. |
+| Запуск фонового мережевого I/O | `core/src/client.rs` | `VERIFIED` | Фоновий таск `tokio::spawn(runner.run())` для обробки TCP фреймів. |
+| Запит коду за номером телефону | `core/src/client.rs` | `VERIFIED` | Метод `request_login_code` зв'язаний через JNI з `AuthScreen.kt`. |
+| Вхід за SMS / Telegram кодом | `core/src/client.rs` | `VERIFIED` | Метод `sign_in` з автоматичним запуском оновлень. |
+| Підтримка 2FA хмарного пароля | `core/src/client.rs` | `VERIFIED` | Метод `check_password` при статусі `2FA_REQUIRED`. |
+| Сесія у SQLite | `core/src/client.rs` | `VERIFIED` | Використовується `SqliteSession` із `grammers-session`. |
+| **Updates Engine (Живі оновлення)**| `core/src/updates.rs`| `VERIFIED` | `stream_updates` із розбором повідомлень, фото, аудіо та видалень. |
+| Завантаження живих чатів (MTProto) | `core/src/client.rs` | `VERIFIED` | Метод `fetch_dialogs` із збереженням у SQLite. |
+| Завантаження живих повідомлень | `core/src/client.rs` | `VERIFIED` | Метод `fetch_messages` із розпізнаванням медіатипу. |
+| Відправка повідомлень (MTProto) | `core/src/client.rs` | `VERIFIED` | Метод `send_message` із збереженням у SQLite. |
 
 ---
 
-## 2. Локальная база данных и приватность
+## 2. Локальна база даних, приватність та медіа
 
-| Функция | Модуль | Статус | Примечание |
+| Функція | Модуль | Статус | Примітка |
 | :--- | :--- | :---: | :--- |
-| Локальное кеширование чатов | `core/src/db.rs` | `VERIFIED` | Протестировано через `tests/db_tests.rs`. |
-| Локальное кеширование сообщений | `core/src/db.rs` | `VERIFIED` | Протестировано через `tests/db_tests.rs`. |
-| **Anti-Delete (Текст)** | `core/src/db.rs` | `VERIFIED` | `test_anti_delete_verification` подтвердил сохранение при удалении. |
-| **Anti-Edit (История)** | `core/src/db.rs` | `VERIFIED` | `test_anti_edit_verification` подтвердил сохранение `original_text`. |
-| **Ghost Mode (Анти-прочтение)** | `core/src/ghost.rs` | `VERIFIED` | Протестировано через `tests/ghost_agent_tests.rs`. |
-| **Ghost Mode (Скрытие набора)** | `core/src/ghost.rs` | `VERIFIED` | Протестировано через `tests/ghost_agent_tests.rs`. |
-| **Ghost Mode (Скрытие онлайн)** | `core/src/ghost.rs` | `VERIFIED` | Протестировано через `tests/ghost_agent_tests.rs`. |
-| Anti-Delete для медиафайлов | `core/src/db.rs` | `NOT STARTED` | Запланировано на фазу мультимедиа. |
+| Локальне кешування чатів | `core/src/db.rs` | `VERIFIED` | Протестовано через `tests/db_tests.rs`. |
+| Локальне кешування повідомлень | `core/src/db.rs` | `VERIFIED` | Протестовано через `tests/db_tests.rs`. |
+| **Anti-Delete (Текст)** | `core/src/db.rs` | `VERIFIED` | `test_anti_delete_verification` підтвердив збереження при видаленні. |
+| **Anti-Delete (Медіа)** | `core/src/db.rs` | `VERIFIED` | `test_media_anti_delete_storage` підтвердив збереження `media_path`. |
+| **Anti-Edit (Історія)** | `core/src/db.rs` | `VERIFIED` | `test_anti_edit_verification` підтвердив збереження `original_text`. |
+| **Ghost Mode (Анти-прочитання)**| `core/src/ghost.rs` | `VERIFIED` | Протестовано через `tests/ghost_agent_tests.rs`. |
+| **Ghost Mode (Приховування набору)**| `core/src/ghost.rs` | `VERIFIED` | Протестовано через `tests/ghost_agent_tests.rs`. |
+| **Ghost Mode (Приховування онлайну)**| `core/src/ghost.rs` | `VERIFIED` | Протестовано через `tests/ghost_agent_tests.rs`. |
 
 ---
 
-## 3. Пользовательский интерфейс (Jetpack Compose, Pixel OS MD3)
+## 3. Мультимедіа та контент (Фаза 3)
 
-| Функция | Модуль | Статус | Примечание |
+| Функція | Модуль | Статус | Примітка |
 | :--- | :--- | :---: | :--- |
-| Dynamic Color (Monet) | `ui/theme/Theme.kt` | `VERIFIED` | Адаптивная палитра под обои Pixel OS. |
-| Экран авторизации (AuthScreen) | `ui/screens/auth/` | `VERIFIED` | Телефон -> Код -> 2FA пароль в едином Pixel-флоу. |
-| Нижний бар навигации (5 табов) | `MainActivity.kt` | `VERIFIED` | Чаты, Контакты, AI Агент, Профиль, Настройки. |
-| Список чатов в стиле Pixel | `ui/screens/chats/` | `VERIFIED` | Аватар слева, имя/превью центр, время/точки справа. |
-| Настраиваемые индикаторы прочтения | `ui/screens/settings/`| `VERIFIED` | Точки (`•`/`••`), галочки (`✓`/`✓✓`), сердечки (`♡`/`♥`), рисочки (`/`/`//`). |
-| Экран диалога с сообщениями | `ui/screens/chat/` | `VERIFIED` | Плавный скролл, реверсивный лейаут. |
-| Свайп влево для ответа (Reply) | `ChatScreen.kt` | `VERIFIED` | Горизонтальный драг с порогом 80dp. |
-| Свайп вправо для выхода из чата | `ChatScreen.kt` | `VERIFIED` | Жест закрытия с порогом 150dp. |
-| Плашка «[Видалено співрозмовником]» | `MessageBubbleItem.kt`| `VERIFIED` | Визуальное отображение удаленного текста. |
-| Плашка «Було: ...» (Anti-Edit) | `MessageBubbleItem.kt`| `VERIFIED` | Визуальное отображение исходного текста. |
-| Экран настроек (SettingsScreen) | `ui/screens/settings/`| `VERIFIED` | Управление Ghost Mode, стилем индикаторов, Anti-Delete, логаут. |
-| Экран контактов (ContactsScreen) | `ui/screens/contacts/`| `VERIFIED` | Поиск и список контактов/диалогов. |
-| Экран профиля (ProfileScreen) | `ui/screens/profile/` | `VERIFIED` | Просмотр статуса MTProto, шифрования, настроек. |
+| Асинхронне завантаження аватарок | `ChatListScreen.kt` | `VERIFIED` | Інтеграція Coil `AsyncImage` із fallback на літери. |
+| Відображення фото-вкладень | `ChatScreen.kt` | `VERIFIED` | Заокруглені прев'ю-картки в бульбашках повідомлень. |
+| Повноекранний переглядач медіа | `MediaViewerDialog.kt`| `VERIFIED` | Повний екран із жестом свайпу вниз для закриття та Anti-Delete плашкою. |
+| Плеєр голосових повідомлень | `VoicePlayer.kt` | `VERIFIED` | Media3 ExoPlayer із прогрес-баром та кнопкою Play/Pause. |
+| Регулювання швидкості аудіо | `VoicePlayer.kt` | `VERIFIED` | Перемикач швидкості `1x` / `1.5x` / `2x`. |
+| Документи та файли | `ChatScreen.kt` | `VERIFIED` | Картка файлу з назвою та іконкою документа. |
 
 ---
 
-## 4. Автономный AI Агент
+## 4. Користувацький інтерфейс (Jetpack Compose MD3 Expressive)
 
-| Функция | Модуль | Статус | Примечание |
+| Функція | Модуль | Статус | Примітка |
 | :--- | :--- | :---: | :--- |
-| Чтение истории сообщений чата | `core/src/agent.rs` | `VERIFIED` | Протестировано через `tests/ghost_agent_tests.rs`. |
-| Извлечение контекста для саммари | `core/src/agent.rs` | `VERIFIED` | Протестировано через `tests/ghost_agent_tests.rs`. |
-| Обновление информации профиля (Био) | `core/src/agent.rs` | `VERIFIED` | Протестировано через `tests/ghost_agent_tests.rs`. |
-| Подготовка и отправка сообщений | `core/src/agent.rs` | `VERIFIED` | Протестировано через `tests/ghost_agent_tests.rs`. |
-| Экран управления агентом (AgentScreen)| `ui/screens/agent/` | `VERIFIED` | Чипсы быстрых действий, поле произвольных команд, лог результатов. |
+| Dynamic Color (Monet) | `ui/theme/Theme.kt` | `VERIFIED` | Адаптація під системні шпалери Android. |
+| Свайп вліво для відповіді (Reply) | `ChatScreen.kt` | `VERIFIED` | Драг-жест із прев'ю-плашкою над полем введення. |
+| Свайп вправо для закриття чату | `ChatScreen.kt` | `VERIFIED` | Горизонтальний жест закриття з порогом 150dp. |
+| Кастомні значки прочитання | `SettingsScreen.kt` | `VERIFIED` | Крапки (`•`/`••`), галочки (`✓`/`✓✓`), сердечка (`♡`/`♥`), рисочки (`/`/`//`). |
+| Нижня панель навігації (5 розділів)| `MainActivity.kt` | `VERIFIED` | Чати, Контакти, AI Агент, Профіль, Налаштування. |

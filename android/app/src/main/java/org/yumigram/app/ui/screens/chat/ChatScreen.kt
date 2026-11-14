@@ -2,6 +2,7 @@ package org.yumigram.app.ui.screens.chat
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -13,6 +14,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Reply
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -21,11 +23,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import org.yumigram.app.bridge.ChatModel
 import org.yumigram.app.bridge.MessageModel
+import org.yumigram.app.ui.components.MediaViewerDialog
+import org.yumigram.app.ui.components.VoiceMessageBubble
 import org.yumigram.app.ui.screens.settings.IndicatorStyle
 import org.yumigram.app.ui.theme.DeletedRed
 import org.yumigram.app.ui.theme.IncomingBubbleColor
@@ -45,6 +51,7 @@ fun ChatScreen(
 ) {
     var inputText by remember { mutableStateOf("") }
     var replyingTo by remember { mutableStateOf<MessageModel?>(null) }
+    var viewingMediaMessage by remember { mutableStateOf<MessageModel?>(null) }
 
     // Screen-level horizontal drag: swipe right to close chat
     var totalDragX by remember { mutableFloatStateOf(0f) }
@@ -75,18 +82,29 @@ fun ChatScreen(
                 },
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primaryContainer),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = chat.title.take(1).uppercase(),
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                        if (!chat.avatar_path.isNullOrEmpty()) {
+                            AsyncImage(
+                                model = chat.avatar_path,
+                                contentDescription = "Avatar",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
                             )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primaryContainer),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = chat.title.take(1).uppercase(),
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
                         }
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
@@ -210,11 +228,20 @@ fun ChatScreen(
                 MessageBubbleItem(
                     message = msg,
                     indicatorStyle = indicatorStyle,
-                    onSwipeReply = { replyingTo = msg }
+                    onSwipeReply = { replyingTo = msg },
+                    onMediaClick = { viewingMediaMessage = it }
                 )
                 Spacer(modifier = Modifier.height(6.dp))
             }
         }
+    }
+
+    // Fullscreen Media Viewer
+    if (viewingMediaMessage != null) {
+        MediaViewerDialog(
+            message = viewingMediaMessage,
+            onDismiss = { viewingMediaMessage = null }
+        )
     }
 }
 
@@ -222,7 +249,8 @@ fun ChatScreen(
 fun MessageBubbleItem(
     message: MessageModel,
     indicatorStyle: IndicatorStyle,
-    onSwipeReply: () -> Unit
+    onSwipeReply: () -> Unit,
+    onMediaClick: (MessageModel) -> Unit
 ) {
     var offsetX by remember { mutableFloatStateOf(0f) }
 
@@ -300,14 +328,66 @@ fun MessageBubbleItem(
                     Spacer(modifier = Modifier.height(2.dp))
                 }
 
-                // Main message text
-                Text(
-                    text = message.text,
-                    fontSize = 15.sp,
-                    color = Color.White
-                )
+                // Photo preview
+                if (message.media_type == "photo" && !message.media_path.isNullOrEmpty()) {
+                    AsyncImage(
+                        model = message.media_path,
+                        contentDescription = "Photo Attachment",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(180.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { onMediaClick(message) }
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                }
 
-                Spacer(modifier = Modifier.height(4.dp))
+                // Voice / Audio message player
+                if (message.media_type == "voice" || message.media_type == "audio") {
+                    VoiceMessageBubble(
+                        mediaPath = message.media_path,
+                        durationSeconds = message.duration,
+                        isOutgoing = message.is_outgoing
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
+
+                // Generic file attachment
+                if (message.media_type == "file") {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Color.Black.copy(alpha = 0.15f))
+                            .padding(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Description,
+                            contentDescription = "Document",
+                            tint = Color.White
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = message.text.ifBlank { "Файл документу" },
+                            fontSize = 13.sp,
+                            color = Color.White,
+                            maxLines = 1
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
+
+                // Main message text (if not voice or file placeholder)
+                if (message.media_type != "voice" && message.text.isNotBlank()) {
+                    Text(
+                        text = message.text,
+                        fontSize = 15.sp,
+                        color = Color.White
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
 
                 // Bottom row: time + read indicator
                 Row(

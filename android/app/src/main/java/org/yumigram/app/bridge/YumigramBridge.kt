@@ -33,7 +33,9 @@ data class MessageModel(
     val reply_to_id: Int? = null,
     val is_deleted: Boolean = false,
     val original_text: String? = null,
-    val media_type: String? = null
+    val media_type: String? = null,
+    val media_path: String? = null,
+    val duration: Int? = null
 )
 
 @Serializable

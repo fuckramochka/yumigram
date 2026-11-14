@@ -27,7 +27,9 @@ pub struct MessageItem {
     pub reply_to_id: Option<i32>,
     pub is_deleted: bool,
     pub original_text: Option<String>,
-    pub media_type: Option<String>,
+    pub media_type: Option<String>, // "photo", "voice", "audio", "video", "file"
+    pub media_path: Option<String>,
+    pub duration: Option<i32>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

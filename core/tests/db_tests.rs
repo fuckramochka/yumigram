@@ -3,7 +3,6 @@ use yumigram_core::models::{ChatItem, MessageItem};
 
 #[test]
 fn test_db_init_and_chat_operations() {
-    // In-memory or temporary database
     let db = LocalDatabase::new(":memory:").expect("Failed to initialize SQLite in memory");
 
     let chat = ChatItem {
@@ -28,6 +27,11 @@ fn test_db_init_and_chat_operations() {
     assert_eq!(chats[0].id, 1001);
     assert_eq!(chats[0].title, "Test Community");
     assert_eq!(chats[0].unread_count, 5);
+
+    // Update avatar path
+    db.update_chat_avatar_path(1001, "/data/user/0/app/cache/avatar_1001.jpg").expect("Failed to update avatar");
+    let chats_updated = db.get_chats().expect("Failed to get chats");
+    assert_eq!(chats_updated[0].avatar_path, Some("/data/user/0/app/cache/avatar_1001.jpg".into()));
 }
 
 #[test]
@@ -47,6 +51,8 @@ fn test_anti_delete_verification() {
         is_deleted: false,
         original_text: None,
         media_type: None,
+        media_path: None,
+        duration: None,
     };
 
     db.save_message(&msg).expect("Failed to save message");
@@ -84,6 +90,8 @@ fn test_anti_edit_verification() {
         is_deleted: false,
         original_text: None,
         media_type: None,
+        media_path: None,
+        duration: None,
     };
 
     db.save_message(&msg).expect("Failed to save message");
@@ -95,6 +103,39 @@ fn test_anti_edit_verification() {
     assert_eq!(msgs.len(), 1);
     assert_eq!(msgs[0].text, "Новий змінений текст");
     assert_eq!(msgs[0].original_text, Some("Оригінальний текст до правки".into()));
+}
+
+#[test]
+fn test_media_anti_delete_storage() {
+    let db = LocalDatabase::new(":memory:").expect("Failed to initialize SQLite in memory");
+
+    let photo_msg = MessageItem {
+        id: 77,
+        chat_id: 3003,
+        sender_id: 888,
+        sender_name: "Charlie".into(),
+        text: "Фото з відпустки".into(),
+        date: 1700000030,
+        is_outgoing: false,
+        is_read: true,
+        reply_to_id: None,
+        is_deleted: false,
+        original_text: None,
+        media_type: Some("photo".into()),
+        media_path: Some("/data/user/0/app/media/photo_77.jpg".into()),
+        duration: None,
+    };
+
+    db.save_message(&photo_msg).expect("Failed to save media message");
+
+    // Simulate deletion on server
+    db.mark_message_deleted(3003, 77).expect("Failed to mark deleted");
+
+    let msgs = db.get_messages(3003, 10, 0).expect("Failed to get messages");
+    assert_eq!(msgs.len(), 1);
+    assert!(msgs[0].is_deleted);
+    assert_eq!(msgs[0].media_type, Some("photo".into()));
+    assert_eq!(msgs[0].media_path, Some("/data/user/0/app/media/photo_77.jpg".into()));
 }
 
 #[test]

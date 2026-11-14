@@ -18,7 +18,7 @@ impl LocalDatabase {
 
     fn create_tables(&self) -> Result<()> {
         let conn = self.conn.lock().unwrap();
-        
+
         // Chats table
         conn.execute(
             "CREATE TABLE IF NOT EXISTS chats (
@@ -36,7 +36,7 @@ impl LocalDatabase {
             [],
         )?;
 
-        // Messages table with anti-delete and anti-edit support!
+        // Messages table with anti-delete, anti-edit, and media support!
         conn.execute(
             "CREATE TABLE IF NOT EXISTS messages (
                 id INTEGER NOT NULL,
@@ -51,10 +51,16 @@ impl LocalDatabase {
                 is_deleted INTEGER DEFAULT 0,
                 original_text TEXT,
                 media_type TEXT,
+                media_path TEXT,
+                duration INTEGER,
                 PRIMARY KEY (chat_id, id)
             )",
             [],
         )?;
+
+        // Safe migrations for columns
+        let _ = conn.execute("ALTER TABLE messages ADD COLUMN media_path TEXT", []);
+        let _ = conn.execute("ALTER TABLE messages ADD COLUMN duration INTEGER", []);
 
         // Settings table for Ghost mode and preferences
         conn.execute(
@@ -84,7 +90,7 @@ impl LocalDatabase {
                 last_message_date = excluded.last_message_date,
                 last_message_outgoing = excluded.last_message_outgoing,
                 last_message_read = excluded.last_message_read,
-                avatar_path = excluded.avatar_path",
+                avatar_path = COALESCE(excluded.avatar_path, avatar_path)",
             params![
                 chat.id,
                 chat.title,
@@ -136,11 +142,13 @@ impl LocalDatabase {
         let conn = self.conn.lock().unwrap();
         conn.execute(
             "INSERT INTO messages (id, chat_id, sender_id, sender_name, text, date,
-                                   is_outgoing, is_read, reply_to_id, is_deleted, original_text, media_type)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+                                   is_outgoing, is_read, reply_to_id, is_deleted, original_text,
+                                   media_type, media_path, duration)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
              ON CONFLICT(chat_id, id) DO UPDATE SET
                 text = excluded.text,
-                is_read = excluded.is_read",
+                is_read = excluded.is_read,
+                media_path = COALESCE(excluded.media_path, media_path)",
             params![
                 msg.id,
                 msg.chat_id,
@@ -154,7 +162,27 @@ impl LocalDatabase {
                 msg.is_deleted as i32,
                 msg.original_text,
                 msg.media_type,
+                msg.media_path,
+                msg.duration,
             ],
+        )?;
+        Ok(())
+    }
+
+    pub fn update_message_media_path(&self, chat_id: i64, message_id: i32, media_path: &str) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE messages SET media_path = ?1 WHERE chat_id = ?2 AND id = ?3",
+            params![media_path, chat_id, message_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn update_chat_avatar_path(&self, chat_id: i64, avatar_path: &str) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE chats SET avatar_path = ?1 WHERE id = ?2",
+            params![avatar_path, chat_id],
         )?;
         Ok(())
     }
@@ -187,7 +215,8 @@ impl LocalDatabase {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
             "SELECT id, chat_id, sender_id, sender_name, text, date,
-                    is_outgoing, is_read, reply_to_id, is_deleted, original_text, media_type
+                    is_outgoing, is_read, reply_to_id, is_deleted, original_text,
+                    media_type, media_path, duration
              FROM messages 
              WHERE chat_id = ?1 
              ORDER BY date DESC, id DESC 
@@ -208,6 +237,8 @@ impl LocalDatabase {
                 is_deleted: row.get::<_, i32>(9)? != 0,
                 original_text: row.get(10)?,
                 media_type: row.get(11)?,
+                media_path: row.get(12)?,
+                duration: row.get(13)?,
             })
         })?;
 
