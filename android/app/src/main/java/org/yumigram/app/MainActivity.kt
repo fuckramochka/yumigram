@@ -21,6 +21,7 @@ import org.yumigram.app.ui.screens.auth.AuthScreen
 import org.yumigram.app.ui.screens.chat.ChatScreen
 import org.yumigram.app.ui.screens.chats.ChatListScreen
 import org.yumigram.app.ui.screens.contacts.ContactsScreen
+import org.yumigram.app.ui.screens.plugins.PluginsScreen
 import org.yumigram.app.ui.screens.profile.ProfileScreen
 import org.yumigram.app.ui.screens.settings.IndicatorStyle
 import org.yumigram.app.ui.screens.settings.SettingsScreen
@@ -107,6 +108,7 @@ fun MainAppContainer(
     var chats by remember { mutableStateOf<List<ChatModel>>(emptyList()) }
     var messages by remember { mutableStateOf<List<MessageModel>>(emptyList()) }
     var isRefreshing by remember { mutableStateOf(false) }
+    var isViewingPlugins by remember { mutableStateOf(false) }
 
     val scope = rememberCoroutineScope()
 
@@ -147,7 +149,11 @@ fun MainAppContainer(
         }
     }
 
-    if (selectedChat != null) {
+    if (isViewingPlugins) {
+        PluginsScreen(
+            onBack = { isViewingPlugins = false }
+        )
+    } else if (selectedChat != null) {
         ChatScreen(
             chat = selectedChat!!,
             messages = messages,
@@ -215,6 +221,7 @@ fun MainAppContainer(
                         Screen.Settings -> SettingsScreen(
                             currentIndicator = indicatorStyle,
                             onIndicatorChanged = { indicatorStyle = it },
+                            onOpenPlugins = { isViewingPlugins = true },
                             onLogout = onLogout
                         )
                     }

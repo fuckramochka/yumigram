@@ -4,11 +4,13 @@ pub mod ghost;
 pub mod agent;
 pub mod client;
 pub mod updates;
+pub mod plugins;
 
 use db::LocalDatabase;
 use ghost::GhostManager;
 use agent::AgentExecutor;
 use client::TelegramManager;
+use plugins::PluginManager;
 use models::{ChatItem, GhostConfig, AgentActionRequest};
 
 use jni::objects::{JClass, JString};
@@ -20,6 +22,7 @@ struct AppState {
     db: Arc<LocalDatabase>,
     ghost: GhostManager,
     agent: AgentExecutor,
+    plugins: Arc<PluginManager>,
     tg: Arc<TelegramManager>,
     rt: tokio::runtime::Runtime,
 }
@@ -61,6 +64,7 @@ pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeInit(
             let db = Arc::new(db_inst);
             let ghost = GhostManager::new(GhostConfig::default());
             let agent = AgentExecutor::new(db.clone());
+            let plugins = Arc::new(PluginManager::new(db.clone()));
             let tg = Arc::new(TelegramManager::new(session_p));
 
             let rt = match tokio::runtime::Builder::new_multi_thread()
@@ -81,7 +85,7 @@ pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeInit(
                 }
             });
 
-            let app_state = AppState { db, ghost, agent, tg, rt };
+            let app_state = AppState { db, ghost, agent, plugins, tg, rt };
             let _ = STATE.set(Mutex::new(app_state));
             1
         }
@@ -247,15 +251,17 @@ pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeSendMes
     chat_id: jlong,
     text: JString,
 ) -> jstring {
-    let text_str: String = match env.get_string(&text) {
+    let raw_text: String = match env.get_string(&text) {
         Ok(s) => s.into(),
         Err(_) => return env.new_string("{\"success\":false}").unwrap().into_raw(),
     };
 
     let result = if let Some(state) = get_state() {
+        // Pipeline outgoing message through active plugin hooks!
+        let transformed_text = state.plugins.process_outgoing_message(chat_id, raw_text);
         let tg = state.tg.clone();
         let db = state.db.clone();
-        match state.rt.block_on(tg.send_message(&db, chat_id, &text_str)) {
+        match state.rt.block_on(tg.send_message(&db, chat_id, &transformed_text)) {
             Ok(msg) => serde_json::to_string(&msg).unwrap_or_else(|_| "{\"success\":false}".into()),
             Err(e) => format!("{{\"success\":false,\"message\":\"{}\"}}", e),
         }
@@ -375,4 +381,42 @@ pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeExecute
     };
 
     env.new_string(result).unwrap().into_raw()
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeListPlugins(
+    env: JNIEnv,
+    _class: JClass,
+) -> jstring {
+    let result = if let Some(state) = get_state() {
+        let plugins = state.plugins.list_plugins();
+        serde_json::to_string(&plugins).unwrap_or_else(|_| "[]".into())
+    } else {
+        "[]".into()
+    };
+
+    env.new_string(result).unwrap().into_raw()
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeSetPluginEnabled(
+    mut env: JNIEnv,
+    _class: JClass,
+    plugin_id: JString,
+    enabled: jboolean,
+) -> jboolean {
+    let id_str: String = match env.get_string(&plugin_id) {
+        Ok(s) => s.into(),
+        Err(_) => return 0,
+    };
+
+    if let Some(state) = get_state() {
+        if state.plugins.set_plugin_enabled(&id_str, enabled != 0).is_ok() {
+            1
+        } else {
+            0
+        }
+    } else {
+        0
+    }
 }

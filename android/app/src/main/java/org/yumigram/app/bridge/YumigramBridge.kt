@@ -54,6 +54,23 @@ data class AgentResult(
 )
 
 @Serializable
+data class PluginManifestModel(
+    val id: String,
+    val name: String,
+    val version: String,
+    val author: String,
+    val description: String,
+    val min_core_version: String,
+    val permissions: List<String>
+)
+
+@Serializable
+data class PluginStateModel(
+    val manifest: PluginManifestModel,
+    val is_enabled: Boolean
+)
+
+@Serializable
 data class AuthResponse(
     val success: Boolean,
     val status: String? = null,
@@ -97,6 +114,27 @@ object YumigramBridge {
     external fun nativeMarkDeleted(chatId: Long, messageId: Int): Boolean
     external fun nativeSetGhostConfig(hideRead: Boolean, hideTyping: Boolean, hideOnline: Boolean)
     external fun nativeExecuteAgentAction(actionJson: String): String
+    external fun nativeListPlugins(): String
+    external fun nativeSetPluginEnabled(pluginId: String, enabled: Boolean): Boolean
+
+    suspend fun listPlugins(): List<PluginStateModel> = withContext(Dispatchers.IO) {
+        if (!isLoaded) return@withContext emptyList()
+        val raw = nativeListPlugins()
+        try {
+            json.decodeFromString<List<PluginStateModel>>(raw)
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    suspend fun setPluginEnabled(pluginId: String, enabled: Boolean): Boolean = withContext(Dispatchers.IO) {
+        if (!isLoaded) return@withContext false
+        try {
+            nativeSetPluginEnabled(pluginId, enabled)
+        } catch (_: Exception) {
+            false
+        }
+    }
 
     suspend fun isAuthorized(): Boolean = withContext(Dispatchers.IO) {
         if (!isLoaded) return@withContext false
