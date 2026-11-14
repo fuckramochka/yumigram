@@ -1,0 +1,18 @@
+# Gradle and Android
+.gradle/
+build/
+*/build/
+app/build/
+local.properties
+.idea/
+*.iml
+.DS_Store
+
+# Rust and Cargo
+core/target/
+*.pdb
+
+# Local test databases
+*.db
+*.db-journal
+test_session.session
