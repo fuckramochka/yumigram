@@ -1,39 +1,106 @@
 package org.yumigram.app.ui.components
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Send
-import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
-import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.delay
+import org.yumigram.app.media.AudioRecorderManager
 
 @Composable
 fun VoiceRecordBar(
     onCancel: () -> Unit,
-    onSendVoice: (durationSec: Int) -> Unit,
+    onSendVoice: (filePath: String, durationSec: Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val recorder = remember { AudioRecorderManager(context) }
+    var isRecordingStarted by remember { mutableStateOf(false) }
     var elapsedSeconds by remember { mutableIntStateOf(0) }
 
+    // Real dynamic waveform bars from microphone amplitude
+    val waveformAmplitudes = remember { mutableStateListOf(0.2f, 0.3f, 0.15f, 0.4f, 0.25f, 0.5f, 0.35f, 0.2f, 0.4f, 0.3f) }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            val started = recorder.startRecording()
+            isRecordingStarted = started
+            if (!started) {
+                Toast.makeText(context, "Не вдалося запустити мікрофон", Toast.LENGTH_SHORT).show()
+                onCancel()
+            }
+        } else {
+            Toast.makeText(context, "Потрібен дозвіл на запис аудіо", Toast.LENGTH_SHORT).show()
+            onCancel()
+        }
+    }
+
     LaunchedEffect(Unit) {
-        while (true) {
-            delay(1000)
-            elapsedSeconds += 1
+        val hasPermission = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (hasPermission) {
+            val started = recorder.startRecording()
+            isRecordingStarted = started
+            if (!started) {
+                Toast.makeText(context, "Не вдалося ініціалізувати мікрофон", Toast.LENGTH_SHORT).show()
+                onCancel()
+            }
+        } else {
+            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            if (isRecordingStarted) {
+                recorder.cancelRecording()
+            }
+        }
+    }
+
+    // Live timer & real amplitude sampling
+    LaunchedEffect(isRecordingStarted) {
+        if (!isRecordingStarted) return@LaunchedEffect
+        var tickCount = 0
+        while (isRecordingStarted) {
+            delay(100)
+            tickCount++
+            if (tickCount % 10 == 0) {
+                elapsedSeconds++
+            }
+
+            // Real physical microphone input amplitude!
+            val rawAmp = recorder.getMaxAmplitude()
+            val normalized = (rawAmp / 28000f).coerceIn(0.12f, 1.0f)
+            if (waveformAmplitudes.size >= 12) {
+                waveformAmplitudes.removeAt(0)
+            }
+            waveformAmplitudes.add(normalized)
         }
     }
 
@@ -62,9 +129,13 @@ fun VoiceRecordBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // Cancel button with trash icon
+            // Cancel button
             IconButton(
-                onClick = onCancel,
+                onClick = {
+                    recorder.cancelRecording()
+                    isRecordingStarted = false
+                    onCancel()
+                },
                 modifier = Modifier.size(36.dp)
             ) {
                 Icon(
@@ -94,30 +165,21 @@ fun VoiceRecordBar(
                 )
             }
 
-            // Waveform simulation bars
+            // Real dynamic physical waveform bars reacting to sound!
             Row(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(horizontal = 12.dp),
+                    .padding(horizontal = 10.dp),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                val waveHeights = listOf(12, 24, 18, 30, 14, 28, 20, 32, 16, 22)
-                waveHeights.forEachIndexed { idx, baseHeight ->
-                    val animatedHeight by infiniteTransition.animateFloat(
-                        initialValue = (baseHeight * 0.4f).coerceAtLeast(6f),
-                        targetValue = baseHeight.toFloat(),
-                        animationSpec = infiniteRepeatable(
-                            animation = tween(400 + idx * 40, easing = FastOutSlowInEasing),
-                            repeatMode = RepeatMode.Reverse
-                        ),
-                        label = "wave$idx"
-                    )
+                waveformAmplitudes.forEach { amp ->
+                    val barHeight = (amp * 32.dp.value).coerceIn(4f, 32f)
                     Box(
                         modifier = Modifier
-                            .padding(horizontal = 2.dp)
+                            .padding(horizontal = 1.5.dp)
                             .width(3.dp)
-                            .height(animatedHeight.dp)
+                            .height(barHeight.dp)
                             .clip(RoundedCornerShape(1.5.dp))
                             .background(MaterialTheme.colorScheme.primary)
                     )
@@ -127,8 +189,14 @@ fun VoiceRecordBar(
             // Send Voice Message button
             FilledIconButton(
                 onClick = {
-                    val duration = if (elapsedSeconds > 0) elapsedSeconds else 3
-                    onSendVoice(duration)
+                    isRecordingStarted = false
+                    val (file, duration) = recorder.stopRecording()
+                    if (file != null && file.exists() && file.length() > 0) {
+                        onSendVoice(file.absolutePath, duration)
+                    } else {
+                        Toast.makeText(context, "Запис надто короткий", Toast.LENGTH_SHORT).show()
+                        onCancel()
+                    }
                 },
                 modifier = Modifier.size(42.dp),
                 shape = CircleShape

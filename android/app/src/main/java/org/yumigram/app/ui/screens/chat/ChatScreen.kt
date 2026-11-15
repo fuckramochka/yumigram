@@ -393,11 +393,12 @@ fun ChatScreen(
                 if (isRecordingVoice) {
                     VoiceRecordBar(
                         onCancel = { isRecordingVoice = false },
-                        onSendVoice = { duration ->
+                        onSendVoice = { filePath, duration ->
                             isRecordingVoice = false
                             dispatchMessage(
                                 text = "🎙️ Голосове повідомлення ($duration сек)",
                                 mediaType = "voice",
+                                mediaPath = filePath,
                                 duration = duration
                             )
                         },
@@ -756,11 +757,12 @@ fun ChatScreen(
     if (showRecordVideoNote) {
         RoundVideoRecordDialog(
             onDismiss = { showRecordVideoNote = false },
-            onSendVideoNote = { duration ->
+            onSendVideoNote = { filePath, duration ->
                 showRecordVideoNote = false
                 dispatchMessage(
                     text = "⭕ Відео-повідомлення ($duration сек)",
                     mediaType = "video_note",
+                    mediaPath = filePath,
                     duration = duration
                 )
             }

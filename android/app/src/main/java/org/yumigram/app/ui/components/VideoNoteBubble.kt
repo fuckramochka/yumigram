@@ -1,6 +1,8 @@
 package org.yumigram.app.ui.components
 
 import android.net.Uri
+import android.view.ViewGroup
+import android.widget.FrameLayout
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -9,11 +11,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Videocam
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -23,14 +23,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
-import coil.compose.AsyncImage
+import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
 import java.io.File
 
@@ -46,8 +47,16 @@ fun VideoNoteBubble(
     var currentPositionMs by remember { mutableLongStateOf(0L) }
     var totalDurationMs by remember { mutableLongStateOf((durationSeconds ?: 15) * 1000L) }
 
-    val exoPlayer = remember {
+    val hasRealVideo = remember(mediaPath) {
+        if (!mediaPath.isNullOrEmpty()) {
+            val f = File(mediaPath)
+            f.exists() && f.length() > 0
+        } else false
+    }
+
+    val exoPlayer = remember(mediaPath) {
         ExoPlayer.Builder(context).build().apply {
+            repeatMode = Player.REPEAT_MODE_ONE
             if (!mediaPath.isNullOrEmpty()) {
                 val uri = if (mediaPath.startsWith("/") || mediaPath.startsWith("file://")) {
                     Uri.fromFile(File(mediaPath))
@@ -100,18 +109,13 @@ fun VideoNoteBubble(
         label = "angle"
     )
 
-    val progress = remember(currentPositionMs, totalDurationMs) {
-        if (totalDurationMs > 0) (currentPositionMs.toFloat() / totalDurationMs.toFloat()).coerceIn(0f, 1f)
-        else 0f
-    }
-
     val displaySecs = remember(currentPositionMs, totalDurationMs, isPlaying) {
         val ms = if (isPlaying || currentPositionMs > 0) currentPositionMs else totalDurationMs
         val secs = (ms / 1000).toInt()
         String.format("%d:%02d", secs / 60, secs % 60)
     }
 
-    // Border brush: gradient that rotates when playing
+    // Border brush: neon cyan / blue / violet gradient that animates when playing
     val borderBrush = remember(isPlaying, angle) {
         if (isPlaying) {
             Brush.sweepGradient(
@@ -137,11 +141,11 @@ fun VideoNoteBubble(
         modifier = modifier.width(200.dp),
         horizontalAlignment = if (isOutgoing) Alignment.End else Alignment.Start
     ) {
-        // The Telegram Video Circle
+        // The Telegram Round Video Note Player
         Box(
             modifier = Modifier
-                .size(190.dp)
-                .rotate(if (isPlaying) angle * 0.1f else 0f)
+                .size(196.dp)
+                .rotate(if (isPlaying) angle * 0.05f else 0f)
                 .border(3.5.dp, borderBrush, CircleShape)
                 .padding(3.dp)
                 .clip(CircleShape)
@@ -155,20 +159,26 @@ fun VideoNoteBubble(
                 },
             contentAlignment = Alignment.Center
         ) {
-            // Video preview / thumbnail
-            val videoFile = remember(mediaPath) {
-                if (!mediaPath.isNullOrEmpty()) File(mediaPath) else null
-            }
-
-            if (videoFile != null && videoFile.exists()) {
-                AsyncImage(
-                    model = videoFile,
-                    contentDescription = "Відео-кружечок Telegram",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
+            if (hasRealVideo) {
+                // Real Video Frame Rendering via AndroidView PlayerView!
+                AndroidView(
+                    factory = { ctx ->
+                        PlayerView(ctx).apply {
+                            player = exoPlayer
+                            useController = false
+                            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                            layoutParams = FrameLayout.LayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                ViewGroup.LayoutParams.MATCH_PARENT
+                            )
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(CircleShape)
                 )
             } else {
-                // Animated camera simulation backdrop
+                // Fallback circular backdrop when loading or offline
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -182,13 +192,13 @@ fun VideoNoteBubble(
                     Icon(
                         imageVector = Icons.Rounded.Videocam,
                         contentDescription = "Кружечок",
-                        tint = Color.White.copy(alpha = 0.6f),
+                        tint = Color.White.copy(alpha = 0.7f),
                         modifier = Modifier.size(54.dp)
                     )
                 }
             }
 
-            // Translucent play/pause overlay in center
+            // Play overlay icon when paused
             if (!isPlaying) {
                 Box(
                     modifier = Modifier
@@ -204,19 +214,6 @@ fun VideoNoteBubble(
                         modifier = Modifier.size(32.dp)
                     )
                 }
-            }
-
-            // Circular progress ring on edge
-            if (isPlaying && progress > 0f) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .border(
-                            width = 2.dp,
-                            color = Color(0xFF00E5FF).copy(alpha = 0.7f),
-                            shape = CircleShape
-                        )
-                )
             }
         }
 
