@@ -47,6 +47,9 @@ object ThemeManager {
     private val _chatWallpaper = MutableStateFlow(ChatWallpaper.DEFAULT)
     val chatWallpaper: StateFlow<ChatWallpaper> = _chatWallpaper
 
+    private val _customWallpaperUri = MutableStateFlow<String?>(null)
+    val customWallpaperUri: StateFlow<String?> = _customWallpaperUri
+
     fun init(context: Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val modeStr = prefs.getString("theme_mode", ThemeMode.SYSTEM.name) ?: ThemeMode.SYSTEM.name
@@ -59,6 +62,8 @@ object ThemeManager {
 
         val wallpaperStr = prefs.getString("chat_wallpaper", ChatWallpaper.DEFAULT.name) ?: ChatWallpaper.DEFAULT.name
         _chatWallpaper.value = try { ChatWallpaper.valueOf(wallpaperStr) } catch (_: Exception) { ChatWallpaper.DEFAULT }
+
+        _customWallpaperUri.value = prefs.getString("custom_wallpaper_uri", null)
     }
 
     fun setThemeMode(context: Context, mode: ThemeMode) {
@@ -83,5 +88,11 @@ object ThemeManager {
         _chatWallpaper.value = wallpaper
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit().putString("chat_wallpaper", wallpaper.name).apply()
+    }
+
+    fun setCustomWallpaperUri(context: Context, uri: String?) {
+        _customWallpaperUri.value = uri
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putString("custom_wallpaper_uri", uri).apply()
     }
 }

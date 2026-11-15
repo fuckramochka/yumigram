@@ -28,12 +28,18 @@ impl UpdatesEngine {
 
                     let (media_type, duration) = match msg.media() {
                         Some(Media::Photo(_)) => (Some("photo".to_string()), None),
+                        Some(Media::Sticker(_)) => (Some("sticker".to_string()), None),
+                        Some(Media::Poll(_)) => (Some("poll".to_string()), None),
                         Some(Media::Document(ref doc)) => {
                             let mime = doc.mime_type().unwrap_or("");
                             if mime.starts_with("audio/") || mime.contains("ogg") {
                                 (Some("voice".to_string()), None)
                             } else if mime.starts_with("video/") {
                                 (Some("video".to_string()), None)
+                            } else if mime == "image/webp" || mime.contains("tgsticker") || mime.contains("sticker") {
+                                (Some("sticker".to_string()), None)
+                            } else if mime.contains("gif") {
+                                (Some("gif".to_string()), None)
                             } else {
                                 (Some("file".to_string()), None)
                             }

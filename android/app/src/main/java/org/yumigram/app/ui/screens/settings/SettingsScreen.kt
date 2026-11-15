@@ -1,6 +1,9 @@
 package org.yumigram.app.ui.screens.settings
 
+import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -61,6 +64,16 @@ fun SettingsScreen(
     val currentDynamicColor by ThemeManager.dynamicColor.collectAsState()
     val currentAccent by ThemeManager.accentPalette.collectAsState()
     val currentWallpaper by ThemeManager.chatWallpaper.collectAsState()
+    val customWallpaperUri by ThemeManager.customWallpaperUri.collectAsState()
+
+    val galleryWallpaperLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            ThemeManager.setCustomWallpaperUri(context, it.toString())
+            Toast.makeText(context, "Власні шпалери встановлено!", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     var showIndicatorDialog by remember { mutableStateOf(false) }
 
@@ -226,6 +239,37 @@ fun SettingsScreen(
                                     label = { Text(wallpaper.title, fontSize = 12.sp) },
                                     shape = RoundedCornerShape(14.dp)
                                 )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedButton(
+                                onClick = { galleryWallpaperLauncher.launch("image/*") },
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(Icons.Rounded.Image, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = if (customWallpaperUri != null) "Змінити фото з галереї" else "Шпалери з власної галереї",
+                                    fontSize = 12.sp
+                                )
+                            }
+
+                            if (customWallpaperUri != null) {
+                                IconButton(
+                                    onClick = {
+                                        ThemeManager.setCustomWallpaperUri(context, null)
+                                        Toast.makeText(context, "Шпалери скинуто на стандартні", Toast.LENGTH_SHORT).show()
+                                    }
+                                ) {
+                                    Icon(Icons.Rounded.DeleteOutline, contentDescription = "Видалити", tint = MaterialTheme.colorScheme.error)
+                                }
                             }
                         }
 

@@ -353,12 +353,18 @@ impl TelegramManager {
             while let Some(msg) = iter.next().await? {
                 let (media_type, duration) = match msg.media() {
                     Some(grammers_client::media::Media::Photo(_)) => (Some("photo".to_string()), None),
+                    Some(grammers_client::media::Media::Sticker(_)) => (Some("sticker".to_string()), None),
+                    Some(grammers_client::media::Media::Poll(_)) => (Some("poll".to_string()), None),
                     Some(grammers_client::media::Media::Document(ref doc)) => {
                         let mime = doc.mime_type().unwrap_or("");
                         if mime.starts_with("audio/") || mime.contains("ogg") {
                             (Some("voice".to_string()), None)
                         } else if mime.starts_with("video/") {
                             (Some("video".to_string()), None)
+                        } else if mime == "image/webp" || mime.contains("tgsticker") || mime.contains("sticker") {
+                            (Some("sticker".to_string()), None)
+                        } else if mime.contains("gif") {
+                            (Some("gif".to_string()), None)
                         } else {
                             (Some("file".to_string()), None)
                         }
@@ -440,6 +446,15 @@ impl TelegramManager {
         message_id: i32,
         target_path: &str,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        if Path::new(target_path).exists() {
+            if let Ok(meta) = std::fs::metadata(target_path) {
+                if meta.len() > 0 {
+                    let _ = db.update_message_media_path(chat_id, message_id, target_path);
+                    return Ok(target_path.to_string());
+                }
+            }
+        }
+
         let client_lock = self.client.lock().await;
         let cache = self.peer_cache.lock().await;
 
