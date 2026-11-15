@@ -51,6 +51,9 @@ class MainActivity : ComponentActivity() {
         }
 
         try {
+            // Initialize Theme Manager with persisted preferences
+            org.yumigram.app.ui.theme.ThemeManager.init(this)
+
             // Initialize Rust core database and MTProto session in app's internal files directory
             val dbPath = "${filesDir.absolutePath}/yumigram.db"
             val sessionPath = "${filesDir.absolutePath}/yumigram_session.session"

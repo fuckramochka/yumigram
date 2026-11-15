@@ -187,6 +187,17 @@ impl LocalDatabase {
         Ok(())
     }
 
+    pub fn get_chat_avatar_path(&self, chat_id: i64) -> Result<Option<String>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare("SELECT avatar_path FROM chats WHERE id = ?1")?;
+        let mut rows = stmt.query(params![chat_id])?;
+        if let Some(row) = rows.next()? {
+            Ok(row.get(0)?)
+        } else {
+            Ok(None)
+        }
+    }
+
     /// Anti-Delete feature: when Telegram sends a delete event, we DO NOT remove the row!
     /// We mark `is_deleted = 1` so the user can still see what was deleted!
     pub fn mark_message_deleted(&self, chat_id: i64, message_id: i32) -> Result<()> {

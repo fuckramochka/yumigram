@@ -44,8 +44,8 @@ pub struct TelegramManager {
 impl TelegramManager {
     pub fn new(session_file: String) -> Self {
         Self {
-            api_id: Arc::new(tokio::sync::RwLock::new(TELEGRAM_DESKTOP_APP_ID)),
-            api_hash: Arc::new(tokio::sync::RwLock::new(TELEGRAM_DESKTOP_APP_HASH.to_string())),
+            api_id: Arc::new(tokio::sync::RwLock::new(OFFICIAL_TELEGRAM_APP_ID)),
+            api_hash: Arc::new(tokio::sync::RwLock::new(OFFICIAL_TELEGRAM_APP_HASH.to_string())),
             session_file,
             client: Arc::new(Mutex::new(None)),
             updates_rx: Arc::new(Mutex::new(None)),
@@ -308,6 +308,7 @@ impl TelegramManager {
                 let last_msg_text = dialog.last_message.as_ref().map(|m| m.text().to_string());
                 let last_msg_date = dialog.last_message.as_ref().map(|m| m.date().as_second()).unwrap_or(0);
                 let last_msg_outgoing = dialog.last_message.as_ref().map(|m| m.outgoing()).unwrap_or(false);
+                let existing_avatar = db.get_chat_avatar_path(chat_id).unwrap_or(None);
 
                 let item = ChatItem {
                     id: chat_id,
@@ -319,7 +320,7 @@ impl TelegramManager {
                     last_message_date: last_msg_date,
                     last_message_outgoing: last_msg_outgoing,
                     last_message_read: false,
-                    avatar_path: None,
+                    avatar_path: existing_avatar,
                 };
 
                 let _ = db.save_chat(&item);
@@ -470,6 +471,15 @@ impl TelegramManager {
         chat_id: i64,
         target_path: &str,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        if Path::new(target_path).exists() {
+            if let Ok(meta) = std::fs::metadata(target_path) {
+                if meta.len() > 0 {
+                    let _ = db.update_chat_avatar_path(chat_id, target_path);
+                    return Ok(target_path.to_string());
+                }
+            }
+        }
+
         let client_lock = self.client.lock().await;
         let cache = self.peer_cache.lock().await;
 

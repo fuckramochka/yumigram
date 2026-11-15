@@ -1,9 +1,12 @@
 package org.yumigram.app.ui.screens.settings
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -15,11 +18,17 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 import org.yumigram.app.bridge.YumigramBridge
+import org.yumigram.app.ui.theme.*
+import org.yumigram.app.updater.AppUpdateManager
+import org.yumigram.app.updater.UpdateInfo
 
 enum class IndicatorStyle(val title: String, val sent: String, val read: String) {
     DOTS("Крапки (Telegram)", "•", "••"),
@@ -37,6 +46,9 @@ fun SettingsScreen(
     onLogout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
     var ghostEnabled by remember { mutableStateOf(true) }
     var hideRead by remember { mutableStateOf(true) }
     var hideTyping by remember { mutableStateOf(true) }
@@ -45,7 +57,17 @@ fun SettingsScreen(
     var antiDeleteEnabled by remember { mutableStateOf(true) }
     var antiEditEnabled by remember { mutableStateOf(true) }
 
+    val currentThemeMode by ThemeManager.themeMode.collectAsState()
+    val currentDynamicColor by ThemeManager.dynamicColor.collectAsState()
+    val currentAccent by ThemeManager.accentPalette.collectAsState()
+    val currentWallpaper by ThemeManager.chatWallpaper.collectAsState()
+
     var showIndicatorDialog by remember { mutableStateOf(false) }
+
+    var isCheckingUpdates by remember { mutableStateOf(false) }
+    var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
+    var downloadProgress by remember { mutableFloatStateOf(0f) }
+    var isDownloading by remember { mutableStateOf(false) }
 
     fun updateGhost() {
         if (ghostEnabled) {
@@ -76,13 +98,190 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+            // THEMES & APPEARANCE (MATERIAL YOU)
+            item {
+                Text(
+                    text = "ЗОВНІШНІЙ ВИГЛЯД ТА ТЕМИ (MATERIAL YOU)",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(start = 12.dp, top = 8.dp)
+                )
+            }
+
+            item {
+                Card(
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        // Theme mode selector
+                        Text(
+                            text = "Режим теми інтерфейсу",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            ThemeMode.values().forEach { mode ->
+                                val isSelected = currentThemeMode == mode
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = { ThemeManager.setThemeMode(context, mode) },
+                                    label = {
+                                        Text(
+                                            text = when (mode) {
+                                                ThemeMode.SYSTEM -> "Система"
+                                                ThemeMode.DARK -> "Темна"
+                                                ThemeMode.LIGHT -> "Світла"
+                                            },
+                                            fontSize = 12.sp,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(14.dp)
+                                )
+                            }
+                        }
+
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+
+                        // Dynamic Color Monet Toggle
+                        SettingsToggleRow(
+                            icon = Icons.Rounded.Palette,
+                            title = "Pixel Dynamic Color (Monet)",
+                            subtitle = "Адаптація кольорів додатку під шпалери робочого столу Android",
+                            checked = currentDynamicColor,
+                            onCheckedChange = { ThemeManager.setDynamicColor(context, it) }
+                        )
+
+                        // Custom Accent Palette (if dynamic color is off)
+                        if (!currentDynamicColor) {
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+                            Text(
+                                text = "Акцентний колір додатку",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                AccentPalette.values().forEach { palette ->
+                                    val isSelected = currentAccent == palette
+                                    FilterChip(
+                                        selected = isSelected,
+                                        onClick = { ThemeManager.setAccentPalette(context, palette) },
+                                        leadingIcon = {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(16.dp)
+                                                    .clip(CircleShape)
+                                                    .background(palette.primary)
+                                            )
+                                        },
+                                        label = { Text(palette.title, fontSize = 12.sp) },
+                                        shape = RoundedCornerShape(14.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+
+                        // Chat Wallpaper Selector
+                        Text(
+                            text = "Шпалери та фон чату",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            ChatWallpaper.values().forEach { wallpaper ->
+                                val isSelected = currentWallpaper == wallpaper
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = { ThemeManager.setChatWallpaper(context, wallpaper) },
+                                    leadingIcon = {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(16.dp)
+                                                .clip(CircleShape)
+                                                .background(wallpaper.backgroundColor)
+                                        )
+                                    },
+                                    label = { Text(wallpaper.title, fontSize = 12.sp) },
+                                    shape = RoundedCornerShape(14.dp)
+                                )
+                            }
+                        }
+
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+
+                        // Indicator style
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showIndicatorDialog = true }
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primaryContainer),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.DoneAll,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(14.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Стиль значка прочитання",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = "${currentIndicator.title} (${currentIndicator.sent} / ${currentIndicator.read})",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowForwardIos,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+
             // GHOST MODE SECTION
             item {
                 Text(
-                    text = "GHOST MODE (ПРИВИД)",
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    text = "GHOST MODE (РЕЖИМ ПРИВИДА)",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(start = 12.dp, top = 8.dp)
                 )
@@ -97,7 +296,7 @@ fun SettingsScreen(
                         SettingsToggleRow(
                             icon = Icons.Rounded.VisibilityOff,
                             title = "Ghost Mode активовано",
-                            subtitle = "Комплексний режим невидимості у мережі",
+                            subtitle = "Комплексний режим невидимості у мережі Telegram",
                             checked = ghostEnabled,
                             onCheckedChange = {
                                 ghostEnabled = it
@@ -111,7 +310,7 @@ fun SettingsScreen(
                             SettingsToggleRow(
                                 icon = Icons.Rounded.MarkChatRead,
                                 title = "Приховувати прочитання",
-                                subtitle = "Не надсилати звіт про прочитання повідомлень",
+                                subtitle = "Не надсилати звіт про перегляд повідомлень",
                                 checked = hideRead,
                                 onCheckedChange = {
                                     hideRead = it
@@ -123,8 +322,8 @@ fun SettingsScreen(
 
                             SettingsToggleRow(
                                 icon = Icons.Rounded.EditNote,
-                                title = "Приховувати статус друку",
-                                subtitle = "Співрозмовник не бачить, коли ви пишете",
+                                title = "Приховувати набір тексту",
+                                subtitle = "Співрозмовник не бачить, коли ви друкуєте",
                                 checked = hideTyping,
                                 onCheckedChange = {
                                     hideTyping = it
@@ -136,7 +335,7 @@ fun SettingsScreen(
 
                             SettingsToggleRow(
                                 icon = Icons.Rounded.PersonOff,
-                                title = "Приховувати онлайн статус",
+                                title = "Приховувати статус онлайн",
                                 subtitle = "Не оновлювати останній час відвідування",
                                 checked = hideOnline,
                                 onCheckedChange = {
@@ -152,8 +351,8 @@ fun SettingsScreen(
             // ANTI-DELETE & ANTI-EDIT SECTION
             item {
                 Text(
-                    text = "БЕЗПЕКА ТА ЗБЕРЕЖЕННЯ (AYUGRAM STYLE)",
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    text = "БЕЗПЕКА ТА ЗБЕРЕЖЕННЯ (ANTI-DELETE)",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(start = 12.dp, top = 8.dp)
                 )
@@ -186,11 +385,11 @@ fun SettingsScreen(
                 }
             }
 
-            // CUSTOMIZATION SECTION
+            // IN-APP AUTO-UPDATE SECTION
             item {
                 Text(
-                    text = "КАСТОМІЗАЦІЯ ІНТЕРФЕЙСУ (PIXEL MD3)",
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    text = "ОНОВЛЕННЯ ПРОГРАМИ",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(start = 12.dp, top = 8.dp)
                 )
@@ -203,52 +402,68 @@ fun SettingsScreen(
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { showIndicatorDialog = true }
-                                .padding(vertical = 8.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.secondaryContainer),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.DoneAll,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSecondaryContainer
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Column(modifier = Modifier.weight(1f)) {
+                            Column {
                                 Text(
-                                    text = "Значок прочитання повідомлень",
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+                                    text = "Версія Yumigram",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = "${currentIndicator.title} (${currentIndicator.sent} / ${currentIndicator.read})",
+                                    text = "Поточна встановлена: ${AppUpdateManager.CURRENT_VERSION}",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
+
+                            FilledTonalButton(
+                                onClick = {
+                                    isCheckingUpdates = true
+                                    scope.launch {
+                                        val info = AppUpdateManager.checkForUpdates()
+                                        isCheckingUpdates = false
+                                        if (info != null) {
+                                            updateInfo = info
+                                        } else {
+                                            Toast.makeText(context, "Встановлено найновішу версію!", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                },
+                                enabled = !isCheckingUpdates && !isDownloading,
+                                shape = RoundedCornerShape(14.dp)
+                            ) {
+                                if (isCheckingUpdates) {
+                                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                } else {
+                                    Text("Перевірити")
+                                }
+                            }
+                        }
+
+                        if (isDownloading) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            LinearProgressIndicator(
+                                progress = { downloadProgress },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(6.dp)
+                                    .clip(RoundedCornerShape(3.dp))
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Завантаження APK: ${(downloadProgress * 100).toInt()}%",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
                         }
                     }
                 }
             }
 
-            // PLUGIN SYSTEM SECTION
-            item {
-                Text(
-                    text = "СИСТЕМА РОЗШИРЕНЬ (ПЛАГІНИ)",
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(start = 12.dp, top = 8.dp)
-                )
-            }
-
+            // PLUGINS
             item {
                 Card(
                     shape = RoundedCornerShape(24.dp),
@@ -264,7 +479,7 @@ fun SettingsScreen(
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(40.dp)
+                                    .size(38.dp)
                                     .clip(CircleShape)
                                     .background(MaterialTheme.colorScheme.tertiaryContainer),
                                 contentAlignment = Alignment.Center
@@ -272,17 +487,19 @@ fun SettingsScreen(
                                 Icon(
                                     imageVector = Icons.Rounded.Extension,
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onTertiaryContainer
+                                    tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
-                            Spacer(modifier = Modifier.width(16.dp))
+                            Spacer(modifier = Modifier.width(14.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "Менеджер плагінів (SDK)",
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+                                    text = "Менеджер розширень (Plugins)",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold
                                 )
                                 Text(
-                                    text = "Керування активними плагінами та хуками повідомлень",
+                                    text = "Керування активними плагінами та ШІ хуками",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -290,7 +507,7 @@ fun SettingsScreen(
                             Icon(
                                 imageVector = Icons.AutoMirrored.Rounded.ArrowForwardIos,
                                 contentDescription = null,
-                                modifier = Modifier.size(16.dp),
+                                modifier = Modifier.size(14.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -298,84 +515,36 @@ fun SettingsScreen(
                 }
             }
 
-            // APP INFO & LOGOUT
+            // LOGOUT BUTTON
             item {
-                Text(
-                    text = "СИСТЕМА ТА АКАУНТ",
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(start = 12.dp, top = 8.dp)
-                )
-            }
-
-            item {
-                Card(
-                    shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+                Button(
+                    onClick = onLogout,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp)
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.tertiaryContainer),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Code,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onTertiaryContainer
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Ядро Yumigram Core",
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
-                                )
-                                Text(
-                                    text = "Rust grammers MTProto v0.12.0 + SQLite",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-
-                        Button(
-                            onClick = onLogout,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.errorContainer,
-                                contentColor = MaterialTheme.colorScheme.onErrorContainer
-                            ),
-                            shape = RoundedCornerShape(16.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(Icons.AutoMirrored.Rounded.ExitToApp, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Вийти з акаунта Telegram", fontWeight = FontWeight.SemiBold)
-                        }
-                    }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.ExitToApp,
+                        contentDescription = "Logout",
+                        tint = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Вийти з акаунта Telegram",
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
-            }
-
-            item {
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(24.dp))
             }
         }
     }
 
+    // Indicator Style Selection Dialog
     if (showIndicatorDialog) {
         AlertDialog(
             onDismissRequest = { showIndicatorDialog = false },
-            title = { Text("Виберіть стиль значка прочитання") },
+            title = { Text("Оберіть стиль прочитання") },
             text = {
                 Column {
                     IndicatorStyle.values().forEach { style ->
@@ -386,7 +555,7 @@ fun SettingsScreen(
                                     onIndicatorChanged(style)
                                     showIndicatorDialog = false
                                 }
-                                .padding(vertical = 12.dp, horizontal = 8.dp),
+                                .padding(vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             RadioButton(
@@ -400,12 +569,12 @@ fun SettingsScreen(
                             Column {
                                 Text(
                                     text = style.title,
-                                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium)
+                                    fontWeight = FontWeight.SemiBold
                                 )
                                 Text(
-                                    text = "Відправлено: ${style.sent}  •  Прочитано: ${style.read}",
+                                    text = "Відправлено: ${style.sent}  ·  Прочитано: ${style.read}",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.primary
                                 )
                             }
                         }
@@ -414,7 +583,70 @@ fun SettingsScreen(
             },
             confirmButton = {
                 TextButton(onClick = { showIndicatorDialog = false }) {
-                    Text("Закрити")
+                    Text("Скасувати")
+                }
+            }
+        )
+    }
+
+    // In-app Update Dialog
+    updateInfo?.let { info ->
+        AlertDialog(
+            onDismissRequest = { updateInfo = null },
+            icon = {
+                Icon(
+                    imageVector = Icons.Rounded.CloudDownload,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            },
+            title = {
+                Text(text = "Доступне оновлення ${info.tagName}")
+            },
+            text = {
+                Column {
+                    Text(
+                        text = info.releaseTitle,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = info.releaseNotes,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val currentInfo = updateInfo
+                        updateInfo = null
+                        if (currentInfo != null) {
+                            isDownloading = true
+                            downloadProgress = 0f
+                            scope.launch {
+                                AppUpdateManager.downloadAndInstallApk(
+                                    context = context,
+                                    downloadUrl = currentInfo.downloadUrl,
+                                    onProgress = { progress -> downloadProgress = progress },
+                                    onError = { err ->
+                                        isDownloading = false
+                                        Toast.makeText(context, err, Toast.LENGTH_LONG).show()
+                                    }
+                                )
+                                isDownloading = false
+                            }
+                        }
+                    }
+                ) {
+                    Text("Оновити зараз")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { updateInfo = null }) {
+                    Text("Пізніше")
                 }
             }
         )
@@ -422,7 +654,7 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun SettingsToggleRow(
+fun SettingsToggleRow(
     icon: ImageVector,
     title: String,
     subtitle: String,
@@ -430,27 +662,32 @@ private fun SettingsToggleRow(
     onCheckedChange: (Boolean) -> Unit
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onCheckedChange(!checked) }
+            .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .size(40.dp)
+                .size(38.dp)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.secondaryContainer),
+                .background(MaterialTheme.colorScheme.primaryContainer),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSecondaryContainer
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.size(20.dp)
             )
         }
-        Spacer(modifier = Modifier.width(16.dp))
+        Spacer(modifier = Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold
             )
             Text(
                 text = subtitle,

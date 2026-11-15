@@ -546,13 +546,13 @@ fun AuthScreen(
     var password by remember { mutableStateOf("") }
     var isPasswordVisible by remember { mutableStateOf(false) }
 
-    val savedProfileName = prefs.getString("selected_api_profile", ApiProfile.DESKTOP.name)
+    val savedProfileName = prefs.getString("selected_api_profile", ApiProfile.ANDROID.name)
     var selectedProfile by remember {
         mutableStateOf(
             try {
-                ApiProfile.valueOf(savedProfileName ?: ApiProfile.DESKTOP.name)
+                ApiProfile.valueOf(savedProfileName ?: ApiProfile.ANDROID.name)
             } catch (_: Exception) {
-                ApiProfile.DESKTOP
+                ApiProfile.ANDROID
             }
         )
     }
@@ -606,12 +606,12 @@ fun AuthScreen(
     // Apply saved profile on initial composition
     LaunchedEffect(Unit) {
         val id = if (selectedProfile == ApiProfile.CUSTOM) {
-            customApiId.toIntOrNull() ?: ApiProfile.DESKTOP.apiId
+            customApiId.toIntOrNull() ?: ApiProfile.ANDROID.apiId
         } else {
             selectedProfile.apiId
         }
         val hash = if (selectedProfile == ApiProfile.CUSTOM) {
-            customApiHash.ifEmpty { ApiProfile.DESKTOP.apiHash }
+            customApiHash.ifEmpty { ApiProfile.ANDROID.apiHash }
         } else {
             selectedProfile.apiHash
         }
