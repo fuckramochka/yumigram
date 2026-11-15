@@ -15,9 +15,12 @@ use tokio::sync::{broadcast, mpsc, Mutex};
 pub const OFFICIAL_TELEGRAM_APP_ID: i32 = 6;
 pub const OFFICIAL_TELEGRAM_APP_HASH: &str = "eb06d4abfb49dc3eeb1aeb98ae0f581e";
 
+pub const TELEGRAM_DESKTOP_APP_ID: i32 = 2040;
+pub const TELEGRAM_DESKTOP_APP_HASH: &str = "b18441a1ff607e10a989891a5462e627";
+
 pub struct TelegramManager {
-    api_id: i32,
-    api_hash: String,
+    api_id: Arc<tokio::sync::RwLock<i32>>,
+    api_hash: Arc<tokio::sync::RwLock<String>>,
     session_file: String,
     client: Arc<Mutex<Option<Client>>>,
     updates_rx: Arc<Mutex<Option<mpsc::Receiver<UpdatesLike>>>>,
@@ -29,8 +32,8 @@ pub struct TelegramManager {
 impl TelegramManager {
     pub fn new(session_file: String) -> Self {
         Self {
-            api_id: OFFICIAL_TELEGRAM_APP_ID,
-            api_hash: OFFICIAL_TELEGRAM_APP_HASH.to_string(),
+            api_id: Arc::new(tokio::sync::RwLock::new(TELEGRAM_DESKTOP_APP_ID)),
+            api_hash: Arc::new(tokio::sync::RwLock::new(TELEGRAM_DESKTOP_APP_HASH.to_string())),
             session_file,
             client: Arc::new(Mutex::new(None)),
             updates_rx: Arc::new(Mutex::new(None)),
@@ -40,15 +43,42 @@ impl TelegramManager {
         }
     }
 
+    /// Sets MTProto API credentials and re-establishes connection
+    pub async fn set_api_credentials(
+        &self,
+        api_id: i32,
+        api_hash: String,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        {
+            let mut id_lock = self.api_id.write().await;
+            *id_lock = api_id;
+            let mut hash_lock = self.api_hash.write().await;
+            *hash_lock = api_hash;
+        }
+        self.connect().await
+    }
+
     /// Connects to real Telegram MTProto servers using official credentials
     /// and actively drives the MTProto network I/O runner in a background task.
     pub async fn connect(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let api_id = *self.api_id.read().await;
+        let mut connection_params = grammers_mtsender::ConnectionParams::default();
+        if api_id == TELEGRAM_DESKTOP_APP_ID {
+            connection_params.device_model = "Telegram Desktop".to_string();
+            connection_params.system_version = "Linux 64-bit".to_string();
+            connection_params.app_version = "5.5.5".to_string();
+        } else {
+            connection_params.device_model = "Google Pixel 8".to_string();
+            connection_params.system_version = "Android 14".to_string();
+            connection_params.app_version = "10.14.5".to_string();
+        }
+
         let session = Arc::new(FileSession::load_or_create(&self.session_file));
         let SenderPool {
             runner,
             handle,
             updates,
-        } = SenderPool::new(session, self.api_id);
+        } = SenderPool::with_configuration(session, api_id, connection_params);
         let client = Client::new(handle);
 
         // Spawn runner in background tokio task to drive socket I/O & frame encryption
@@ -108,13 +138,46 @@ impl TelegramManager {
     pub async fn request_login_code(
         &self,
         phone: &str,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         let lock = self.client.lock().await;
         if let Some(client) = lock.as_ref() {
-            let token = client.request_login_code(phone, &self.api_hash).await?;
-            let mut pending = self.pending_login_token.lock().await;
-            *pending = Some(token);
-            Ok(())
+            let api_hash = self.api_hash.read().await.clone();
+            match client.request_login_code(phone, &api_hash).await {
+                Ok(token) => {
+                    let mut pending = self.pending_login_token.lock().await;
+                    *pending = Some(token);
+                    Ok("OK".to_string())
+                }
+                Err(grammers_mtsender::InvocationError::Rpc(err)) => {
+                    let err_name = &err.name;
+                    if err_name.contains("RECAPTCHA_CHECK") {
+                        let sitekey = if let Some(v) = err.value {
+                            if let Some(pos) = err_name.find("RECAPTCHA_CHECK_") {
+                                let after = &err_name[pos + 16..];
+                                if let Some(key_part) = after.split('_').last() {
+                                    format!("{}{}", v, key_part)
+                                } else {
+                                    format!("{}{}", v, after)
+                                }
+                            } else {
+                                format!("{}", v)
+                            }
+                        } else {
+                            err_name.split('_').last().unwrap_or(err_name).to_string()
+                        };
+                        Ok(format!("RECAPTCHA_REQUIRED:{}", sitekey))
+                    } else if err_name.contains("PHONE_NUMBER_INVALID") {
+                        Err("Невірний формат номера телефону. Перевірте код країни та цифри.".into())
+                    } else if err_name.contains("PHONE_NUMBER_BANNED") {
+                        Err("Цей номер телефону заблоковано в Telegram.".into())
+                    } else if err_name.contains("PHONE_NUMBER_FLOOD") {
+                        Err("Забагато запитів для цього номера. Зачекайте деякий час або увійдіть в офіційному Telegram.".into())
+                    } else {
+                        Err(format!("{}", err).into())
+                    }
+                }
+                Err(e) => Err(format!("{}", e).into()),
+            }
         } else {
             Err("Client not connected to Telegram servers".into())
         }

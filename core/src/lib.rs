@@ -126,6 +126,31 @@ pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeIsAutho
 }
 
 #[unsafe(no_mangle)]
+pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeSetApiCredentials(
+    mut env: JNIEnv,
+    _class: JClass,
+    api_id: jint,
+    api_hash: JString,
+) -> jboolean {
+    let hash_str: String = match env.get_string(&api_hash) {
+        Ok(s) => s.into(),
+        Err(_) => return 0,
+    };
+    let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        if let Some(state) = get_state() {
+            let tg = state.tg.clone();
+            match state.rt.block_on(tg.set_api_credentials(api_id, hash_str)) {
+                Ok(_) => 1,
+                Err(_) => 0,
+            }
+        } else {
+            0
+        }
+    }));
+    res.unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeRequestCode(
     mut env: JNIEnv,
     _class: JClass,
@@ -140,8 +165,21 @@ pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeRequest
         if let Some(state) = get_state() {
             let tg = state.tg.clone();
             match state.rt.block_on(tg.request_login_code(&phone_str)) {
-                Ok(_) => "{\"success\":true,\"message\":\"Code sent\"}".to_string(),
-                Err(e) => format!("{{\"success\":false,\"message\":\"{}\"}}", e),
+                Ok(status) => {
+                    if status.starts_with("RECAPTCHA_REQUIRED:") {
+                        let sitekey = status.strip_prefix("RECAPTCHA_REQUIRED:").unwrap_or("");
+                        format!(
+                            "{{\"success\":false,\"recaptcha_required\":true,\"sitekey\":\"{}\",\"message\":\"Telegram вимагає підтвердження reCAPTCHA або використання ключів Telegram Desktop API (2040)\"}}",
+                            sitekey
+                        )
+                    } else {
+                        "{\"success\":true,\"message\":\"Code sent\"}".to_string()
+                    }
+                }
+                Err(e) => {
+                    let msg = e.to_string().replace('"', "\\\"");
+                    format!("{{\"success\":false,\"message\":\"{}\"}}", msg)
+                }
             }
         } else {
             "{\"success\":false,\"message\":\"State not initialized\"}".to_string()

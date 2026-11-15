@@ -114,7 +114,9 @@ data class AuthResponse(
     val success: Boolean,
     val status: String? = null,
     val message: String? = null,
-    val name: String? = null
+    val name: String? = null,
+    val recaptcha_required: Boolean = false,
+    val sitekey: String? = null
 )
 
 object YumigramBridge {
@@ -141,6 +143,7 @@ object YumigramBridge {
     external fun nativeRequestCode(phone: String): String
     external fun nativeSignIn(code: String): String
     external fun nativeCheckPassword(password: String): String
+    external fun nativeSetApiCredentials(apiId: Int, apiHash: String): Boolean
     external fun nativeFetchLiveChats(limit: Int): String
     external fun nativeFetchLiveMessages(chatId: Long, limit: Int): String
     external fun nativeSendMessage(chatId: Long, text: String): String
@@ -173,6 +176,11 @@ object YumigramBridge {
     suspend fun isAuthorized(): Boolean = withContext(Dispatchers.IO) {
         if (!isLoaded) return@withContext false
         nativeIsAuthorized()
+    }
+
+    suspend fun setApiCredentials(apiId: Int, apiHash: String): Boolean = withContext(Dispatchers.IO) {
+        if (!isLoaded) return@withContext false
+        nativeSetApiCredentials(apiId, apiHash)
     }
 
     suspend fun requestCode(phone: String): AuthResponse = withContext(Dispatchers.IO) {
