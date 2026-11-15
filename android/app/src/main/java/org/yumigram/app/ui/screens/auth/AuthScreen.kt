@@ -1,11 +1,15 @@
 package org.yumigram.app.ui.screens.auth
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -20,6 +24,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -43,22 +49,67 @@ enum class AuthStep {
     PASSWORD
 }
 
-enum class ApiProfile(val label: String, val description: String, val apiId: Int, val apiHash: String) {
+enum class ApiProfile(
+    val label: String,
+    val shortLabel: String,
+    val badge: String,
+    val description: String,
+    val apiId: Int,
+    val apiHash: String
+) {
     DESKTOP(
         label = "Telegram Desktop",
-        description = "App ID: 2040 · Швидкий вхід без перевірок Google Play",
+        shortLabel = "Desktop",
+        badge = "ID: 2040 · Офіційний клієнт",
+        description = "Найбільш стабільний. Вхід без Play Integrity / reCAPTCHA. Код приходить у відкритий Telegram на іншому пристрої або SMS.",
         apiId = 2040,
         apiHash = "b18441a1ff607e10a989891a5462e627"
     ),
+    MACOS(
+        label = "Telegram macOS",
+        shortLabel = "macOS",
+        badge = "ID: 2834 · Apple Swift",
+        description = "Офіційний native клієнт для macOS. Високий пріоритет та швидка доставка кодів Telegram.",
+        apiId = 2834,
+        apiHash = "68875f756c9b437a8b916ca3de215815"
+    ),
+    WEB(
+        label = "Telegram Web (WebK)",
+        shortLabel = "WebK",
+        badge = "ID: 2496 · Браузерний",
+        description = "Офіційний веб-клієнт web.telegram.org/k. Працює як браузерна сесія без блокувань Play Market.",
+        apiId = 2496,
+        apiHash = "8da85b0d5bfe62527e5b244c209159c3"
+    ),
+    IOS(
+        label = "Telegram iOS",
+        shortLabel = "iOS",
+        badge = "ID: 10840 · Apple iPhone",
+        description = "Офіційний мобільний клієнт для iOS. Швидка мобільна автентифікація в екосистемі Telegram.",
+        apiId = 10840,
+        apiHash = "33c45224029d59cb3ad0c16134215aeb"
+    ),
+    ANDROID_X(
+        label = "Telegram Android X",
+        shortLabel = "Android X",
+        badge = "ID: 21724 · TDLib",
+        description = "Офіційний експериментальний Android клієнт на базі TDLib.",
+        apiId = 21724,
+        apiHash = "3e0cb5efcd52300aec5994fdfc5bdc16"
+    ),
     ANDROID(
         label = "Telegram Android",
-        description = "App ID: 6 · Офіційний мобільний клієнт",
+        shortLabel = "Android",
+        badge = "ID: 6 · Офіційний Android",
+        description = "Стандартний Google Play клієнт. Може вимагати Play Integrity або проходження reCAPTCHA.",
         apiId = 6,
         apiHash = "eb06d4abfb49dc3eeb1aeb98ae0f581e"
     ),
     CUSTOM(
         label = "Власний API ID",
-        description = "Ключі розробника з my.telegram.org",
+        shortLabel = "Свій ID",
+        badge = "my.telegram.org",
+        description = "Ваш персональний ID та Hash з порталу my.telegram.org (100% гарантія доставки коду).",
         apiId = 0,
         apiHash = ""
     )
@@ -139,6 +190,24 @@ class PhoneVisualTransformation : VisualTransformation {
     }
 }
 
+@Composable
+fun ApiProfileIcon(
+    profile: ApiProfile,
+    modifier: Modifier = Modifier,
+    tint: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.primary
+) {
+    val icon = when (profile) {
+        ApiProfile.DESKTOP -> Icons.Rounded.Computer
+        ApiProfile.MACOS -> Icons.Rounded.Laptop
+        ApiProfile.WEB -> Icons.Rounded.Public
+        ApiProfile.IOS -> Icons.Rounded.Smartphone
+        ApiProfile.ANDROID_X -> Icons.Rounded.Bolt
+        ApiProfile.ANDROID -> Icons.Rounded.Android
+        ApiProfile.CUSTOM -> Icons.Rounded.Tune
+    }
+    Icon(imageVector = icon, contentDescription = profile.label, modifier = modifier, tint = tint)
+}
+
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun RecaptchaDialog(
@@ -149,25 +218,27 @@ fun RecaptchaDialog(
     Dialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp)
         ) {
             Column(
-                modifier = Modifier.padding(20.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
                     text = "Підтвердження безпеки",
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "Пройдіть перевірку Google reCAPTCHA від Telegram",
+                    text = "Пройдіть перевірку reCAPTCHA для входу через Android API",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
                     modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
                 )
 
@@ -176,26 +247,30 @@ fun RecaptchaDialog(
                     <!DOCTYPE html>
                     <html>
                     <head>
-                        <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
                         <script src="https://www.google.com/recaptcha/api.js" async defer></script>
                         <style>
                             body {
-                                background-color: #1e1f22;
                                 display: flex;
                                 justify-content: center;
                                 align-items: center;
                                 height: 100vh;
                                 margin: 0;
+                                background-color: #f7f9fa;
                             }
                         </style>
-                        <script type="text/javascript">
-                            function onCaptchaSuccess(token) {
-                                window.AndroidBridge.postMessage(token);
-                            }
-                        </script>
                     </head>
                     <body>
-                        <div class="g-recaptcha" data-sitekey="$sitekey" data-callback="onCaptchaSuccess"></div>
+                        <form action="javascript:void(0);">
+                            <div class="g-recaptcha" data-sitekey="$sitekey" data-callback="onRecaptchaSuccess"></div>
+                        </form>
+                        <script>
+                            function onRecaptchaSuccess(token) {
+                                if (window.AndroidBridge) {
+                                    window.AndroidBridge.postMessage(token);
+                                }
+                            }
+                        </script>
                     </body>
                     </html>
                     """.trimIndent()
@@ -236,21 +311,259 @@ fun RecaptchaDialog(
 }
 
 @Composable
+fun ProfileSelectionDialog(
+    currentProfile: ApiProfile,
+    customApiId: String,
+    customApiHash: String,
+    onSelectProfile: (ApiProfile) -> Unit,
+    onSaveCustom: (id: String, hash: String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val uriHandler = LocalUriHandler.current
+    var editingCustom by remember { mutableStateOf(currentProfile == ApiProfile.CUSTOM) }
+    var tempCustomId by remember { mutableStateOf(customApiId) }
+    var tempCustomHash by remember { mutableStateOf(customApiHash) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.85f)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(20.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Вибір MTProto API",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Оберіть клієнт для отримання коду",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Rounded.Close, contentDescription = "Закрити")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    ApiProfile.values().forEach { profile ->
+                        val isSelected = currentProfile == profile
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (isSelected)
+                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                                else
+                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                            ),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    if (profile == ApiProfile.CUSTOM) {
+                                        editingCustom = true
+                                        onSelectProfile(profile)
+                                    } else {
+                                        editingCustom = false
+                                        onSelectProfile(profile)
+                                        onDismiss()
+                                    }
+                                }
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                ApiProfileIcon(
+                                    profile = profile,
+                                    modifier = Modifier.size(24.dp),
+                                    tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = profile.label,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                    )
+                                    Text(
+                                        text = profile.badge,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = profile.description,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                RadioButton(
+                                    selected = isSelected,
+                                    onClick = {
+                                        if (profile == ApiProfile.CUSTOM) {
+                                            editingCustom = true
+                                            onSelectProfile(profile)
+                                        } else {
+                                            editingCustom = false
+                                            onSelectProfile(profile)
+                                            onDismiss()
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    if (editingCustom || currentProfile == ApiProfile.CUSTOM) {
+                        Card(
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp)) {
+                                Text(
+                                    text = "Налаштування власного API ID",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "Особисті ключі з порталу розробників Telegram гарантують 100% отримання коду без блокувань.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 2.dp, bottom = 8.dp)
+                                )
+                                OutlinedTextField(
+                                    value = tempCustomId,
+                                    onValueChange = { tempCustomId = it.filter { ch -> ch.isDigit() } },
+                                    label = { Text("App API ID (наприклад, 1234567)") },
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                OutlinedTextField(
+                                    value = tempCustomHash,
+                                    onValueChange = { tempCustomHash = it.trim() },
+                                    label = { Text("App API Hash (32 символи)") },
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            uriHandler.openUri("https://my.telegram.org")
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Rounded.OpenInNew,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("my.telegram.org", fontSize = 11.sp)
+                                    }
+                                    Button(
+                                        onClick = {
+                                            onSaveCustom(tempCustomId, tempCustomHash)
+                                            onDismiss()
+                                        },
+                                        enabled = tempCustomId.isNotEmpty() && tempCustomHash.isNotEmpty(),
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Text("Застосувати", fontSize = 12.sp)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Text("Готово")
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun AuthScreen(
     onAuthSuccess: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val scrollState = rememberScrollState()
+
+    val prefs = remember {
+        context.getSharedPreferences("yumigram_auth_prefs", Context.MODE_PRIVATE)
+    }
+
     var step by remember { mutableStateOf(AuthStep.PHONE) }
-    // Raw phone number stored in state without formatting spaces
     var phoneNumber by remember { mutableStateOf("+380") }
     var code by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var isPasswordVisible by remember { mutableStateOf(false) }
 
-    var selectedProfile by remember { mutableStateOf(ApiProfile.DESKTOP) }
-    var showApiSettings by remember { mutableStateOf(false) }
-    var customApiId by remember { mutableStateOf("") }
-    var customApiHash by remember { mutableStateOf("") }
+    val savedProfileName = prefs.getString("selected_api_profile", ApiProfile.DESKTOP.name)
+    var selectedProfile by remember {
+        mutableStateOf(
+            try {
+                ApiProfile.valueOf(savedProfileName ?: ApiProfile.DESKTOP.name)
+            } catch (_: Exception) {
+                ApiProfile.DESKTOP
+            }
+        )
+    }
+    var customApiId by remember {
+        mutableStateOf(prefs.getString("custom_api_id", "") ?: "")
+    }
+    var customApiHash by remember {
+        mutableStateOf(prefs.getString("custom_api_hash", "") ?: "")
+    }
+
+    var showProfileDialog by remember { mutableStateOf(false) }
 
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -259,8 +572,51 @@ fun AuthScreen(
 
     var resendCooldown by remember { mutableStateOf(60) }
 
-    val scope = rememberCoroutineScope()
-    val scrollState = rememberScrollState()
+    // Helper to apply MTProto credentials and save preference
+    fun applyProfile(profile: ApiProfile, customId: String? = null, customHash: String? = null) {
+        selectedProfile = profile
+        prefs.edit().putString("selected_api_profile", profile.name).apply()
+        errorMessage = null
+        recaptchaSitekey = null
+
+        val id: Int
+        val hash: String
+
+        if (profile == ApiProfile.CUSTOM) {
+            val effId = customId ?: customApiId
+            val effHash = customHash ?: customApiHash
+            id = effId.toIntOrNull() ?: 0
+            hash = effHash
+            prefs.edit()
+                .putString("custom_api_id", effId)
+                .putString("custom_api_hash", effHash)
+                .apply()
+        } else {
+            id = profile.apiId
+            hash = profile.apiHash
+        }
+
+        if (id > 0 && hash.isNotEmpty()) {
+            scope.launch {
+                YumigramBridge.setApiCredentials(id, hash)
+            }
+        }
+    }
+
+    // Apply saved profile on initial composition
+    LaunchedEffect(Unit) {
+        val id = if (selectedProfile == ApiProfile.CUSTOM) {
+            customApiId.toIntOrNull() ?: ApiProfile.DESKTOP.apiId
+        } else {
+            selectedProfile.apiId
+        }
+        val hash = if (selectedProfile == ApiProfile.CUSTOM) {
+            customApiHash.ifEmpty { ApiProfile.DESKTOP.apiHash }
+        } else {
+            selectedProfile.apiHash
+        }
+        YumigramBridge.setApiCredentials(id, hash)
+    }
 
     // Countdown timer for code resend
     LaunchedEffect(step) {
@@ -298,6 +654,24 @@ fun AuthScreen(
         )
     }
 
+    // Full Profile Selection Dialog
+    if (showProfileDialog) {
+        ProfileSelectionDialog(
+            currentProfile = selectedProfile,
+            customApiId = customApiId,
+            customApiHash = customApiHash,
+            onSelectProfile = { profile ->
+                applyProfile(profile)
+            },
+            onSaveCustom = { id, hash ->
+                customApiId = id
+                customApiHash = hash
+                applyProfile(ApiProfile.CUSTOM, id, hash)
+            },
+            onDismiss = { showProfileDialog = false }
+        )
+    }
+
     Surface(
         modifier = modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background
@@ -308,14 +682,14 @@ fun AuthScreen(
                 .statusBarsPadding()
                 .navigationBarsPadding()
                 .verticalScroll(scrollState)
-                .padding(horizontal = 24.dp, vertical = 32.dp),
+                .padding(horizontal = 24.dp, vertical = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
             // Branding Icon Header
             Box(
                 modifier = Modifier
-                    .size(80.dp)
+                    .size(76.dp)
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.primaryContainer),
                 contentAlignment = Alignment.Center
@@ -327,12 +701,12 @@ fun AuthScreen(
                         AuthStep.PASSWORD -> Icons.Rounded.Lock
                     },
                     contentDescription = null,
-                    modifier = Modifier.size(40.dp),
+                    modifier = Modifier.size(38.dp),
                     tint = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             Text(
                 text = "Yumigram",
@@ -352,8 +726,111 @@ fun AuthScreen(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 8.dp, bottom = 20.dp)
+                modifier = Modifier.padding(top = 6.dp, bottom = 16.dp)
             )
+
+            // MTProto Profile Selector Card (Prominent & Easy 1-tap switcher)
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer
+                ),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp)
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                ApiProfileIcon(
+                                    profile = selectedProfile,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = selectedProfile.label,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = selectedProfile.badge,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+
+                        TextButton(
+                            onClick = { showProfileDialog = true },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text("Всі варіанти", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            Icon(
+                                imageVector = Icons.Rounded.ChevronRight,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Horizontal Quick-Switch Chips
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        ApiProfile.values().forEach { profile ->
+                            val isSelected = selectedProfile == profile
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = {
+                                    if (profile == ApiProfile.CUSTOM) {
+                                        showProfileDialog = true
+                                    } else {
+                                        applyProfile(profile)
+                                    }
+                                },
+                                label = {
+                                    Text(
+                                        text = profile.shortLabel,
+                                        fontSize = 12.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                },
+                                leadingIcon = {
+                                    if (isSelected) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Check,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                },
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                        }
+                    }
+                }
+            }
 
             // Error & Advisory Card
             AnimatedVisibility(
@@ -387,22 +864,20 @@ fun AuthScreen(
                                 ) {
                                     FilledTonalButton(
                                         onClick = {
-                                            scope.launch {
+                                            applyProfile(ApiProfile.DESKTOP)
+                                            val rawDigits = phoneNumber.filter { it.isDigit() }
+                                            if (rawDigits.length >= 7) {
                                                 isLoading = true
-                                                YumigramBridge.setApiCredentials(
-                                                    ApiProfile.DESKTOP.apiId,
-                                                    ApiProfile.DESKTOP.apiHash
-                                                )
-                                                selectedProfile = ApiProfile.DESKTOP
-                                                val rawDigits = phoneNumber.filter { it.isDigit() }
-                                                val res = YumigramBridge.requestCode("+$rawDigits")
-                                                isLoading = false
-                                                if (res.success) {
-                                                    errorMessage = null
-                                                    recaptchaSitekey = null
-                                                    step = AuthStep.CODE
-                                                } else {
-                                                    errorMessage = res.message
+                                                scope.launch {
+                                                    val res = YumigramBridge.requestCode("+$rawDigits")
+                                                    isLoading = false
+                                                    if (res.success) {
+                                                        errorMessage = null
+                                                        recaptchaSitekey = null
+                                                        step = AuthStep.CODE
+                                                    } else {
+                                                        errorMessage = res.message
+                                                    }
                                                 }
                                             }
                                         },
@@ -443,7 +918,6 @@ fun AuthScreen(
                             OutlinedTextField(
                                 value = phoneNumber,
                                 onValueChange = { input ->
-                                    // Accept only leading '+' and digits, prevent multiple '+'
                                     val clean = if (input.startsWith("+")) {
                                         "+" + input.substring(1).filter { it.isDigit() }
                                     } else {
@@ -529,7 +1003,7 @@ fun AuthScreen(
                         }
 
                         AuthStep.CODE -> {
-                            // Show verified recipient phone number
+                            // Show verified recipient phone number badge
                             Surface(
                                 color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
                                 shape = RoundedCornerShape(12.dp),
@@ -559,7 +1033,7 @@ fun AuthScreen(
                             }
 
                             Text(
-                                text = "💬 Перевірте офіційний додаток Telegram на іншому телефоні чи ПК — код приходить у системний чат 'Telegram' (із синьою галочкою)",
+                                text = "💬 Перевірте додаток Telegram на іншому телефоні чи ПК — код приходить у системний чат 'Telegram' (із синьою галочкою)",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center,
@@ -669,7 +1143,88 @@ fun AuthScreen(
                                 }
                             }
 
-                            Spacer(modifier = Modifier.height(6.dp))
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            // Quick Profile Switcher Rescue Card on Step CODE
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                ),
+                                shape = RoundedCornerShape(16.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.HelpOutline,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "Не надходить код?",
+                                            style = MaterialTheme.typography.labelLarge,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "Поточний клієнт: ${selectedProfile.label}. Спробуйте перемкнути API та надіслати код повторно в 1 клік:",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .horizontalScroll(rememberScrollState()),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        listOf(
+                                            ApiProfile.MACOS,
+                                            ApiProfile.WEB,
+                                            ApiProfile.DESKTOP,
+                                            ApiProfile.IOS,
+                                            ApiProfile.ANDROID_X
+                                        ).forEach { altProfile ->
+                                            if (altProfile != selectedProfile) {
+                                                FilledTonalButton(
+                                                    onClick = {
+                                                        applyProfile(altProfile)
+                                                        val rawDigits = phoneNumber.filter { it.isDigit() }
+                                                        if (rawDigits.length >= 7 && !isLoading) {
+                                                            isLoading = true
+                                                            errorMessage = null
+                                                            scope.launch {
+                                                                val res = YumigramBridge.requestCode("+$rawDigits")
+                                                                isLoading = false
+                                                                if (res.success) {
+                                                                    resendCooldown = 60
+                                                                    code = ""
+                                                                    Toast.makeText(
+                                                                        context,
+                                                                        "Запит надіслано через ${altProfile.shortLabel}! Перевірте Telegram.",
+                                                                        Toast.LENGTH_LONG
+                                                                    ).show()
+                                                                } else {
+                                                                    errorMessage = res.message ?: "Помилка відправки коду"
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                                                    shape = RoundedCornerShape(10.dp)
+                                                ) {
+                                                    Text("⚡ ${altProfile.shortLabel}", fontSize = 11.sp)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
 
                             TextButton(
                                 onClick = {
@@ -741,136 +1296,6 @@ fun AuthScreen(
                                     )
                                 } else {
                                     Text("Підтвердити пароль", fontWeight = FontWeight.SemiBold)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // MTProto Profile & Advanced API Settings
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer
-                ),
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(14.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Профіль MTProto:",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                text = selectedProfile.label,
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-
-                        TextButton(
-                            onClick = { showApiSettings = !showApiSettings },
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (showApiSettings) Icons.Rounded.ExpandLess else Icons.Rounded.Tune,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = if (showApiSettings) "Приховати" else "Налаштувати",
-                                style = MaterialTheme.typography.labelMedium
-                            )
-                        }
-                    }
-
-                    AnimatedVisibility(visible = showApiSettings) {
-                        Column(modifier = Modifier.padding(top = 12.dp)) {
-                            HorizontalDivider(modifier = Modifier.padding(bottom = 12.dp))
-
-                            ApiProfile.values().forEach { profile ->
-                                val isSelected = selectedProfile == profile
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    RadioButton(
-                                        selected = isSelected,
-                                        onClick = {
-                                            selectedProfile = profile
-                                            if (profile != ApiProfile.CUSTOM) {
-                                                scope.launch {
-                                                    YumigramBridge.setApiCredentials(profile.apiId, profile.apiHash)
-                                                }
-                                            }
-                                        }
-                                    )
-                                    Column(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .padding(start = 8.dp)
-                                    ) {
-                                        Text(
-                                            text = profile.label,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                        )
-                                        Text(
-                                            text = profile.description,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-                            }
-
-                            if (selectedProfile == ApiProfile.CUSTOM) {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                OutlinedTextField(
-                                    value = customApiId,
-                                    onValueChange = { customApiId = it },
-                                    label = { Text("Custom API ID") },
-                                    singleLine = true,
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                    shape = RoundedCornerShape(12.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                OutlinedTextField(
-                                    value = customApiHash,
-                                    onValueChange = { customApiHash = it },
-                                    label = { Text("Custom API Hash") },
-                                    singleLine = true,
-                                    shape = RoundedCornerShape(12.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Button(
-                                    onClick = {
-                                        val id = customApiId.toIntOrNull() ?: 0
-                                        if (id > 0 && customApiHash.isNotEmpty()) {
-                                            scope.launch {
-                                                YumigramBridge.setApiCredentials(id, customApiHash)
-                                            }
-                                        }
-                                    },
-                                    shape = RoundedCornerShape(12.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text("Застосувати власні ключі")
                                 }
                             }
                         }

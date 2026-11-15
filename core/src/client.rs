@@ -18,6 +18,18 @@ pub const OFFICIAL_TELEGRAM_APP_HASH: &str = "eb06d4abfb49dc3eeb1aeb98ae0f581e";
 pub const TELEGRAM_DESKTOP_APP_ID: i32 = 2040;
 pub const TELEGRAM_DESKTOP_APP_HASH: &str = "b18441a1ff607e10a989891a5462e627";
 
+pub const TELEGRAM_MACOS_APP_ID: i32 = 2834;
+pub const TELEGRAM_MACOS_APP_HASH: &str = "68875f756c9b437a8b916ca3de215815";
+
+pub const TELEGRAM_WEB_APP_ID: i32 = 2496;
+pub const TELEGRAM_WEB_APP_HASH: &str = "8da85b0d5bfe62527e5b244c209159c3";
+
+pub const TELEGRAM_IOS_APP_ID: i32 = 10840;
+pub const TELEGRAM_IOS_APP_HASH: &str = "33c45224029d59cb3ad0c16134215aeb";
+
+pub const TELEGRAM_ANDROID_X_APP_ID: i32 = 21724;
+pub const TELEGRAM_ANDROID_X_APP_HASH: &str = "3e0cb5efcd52300aec5994fdfc5bdc16";
+
 pub struct TelegramManager {
     api_id: Arc<tokio::sync::RwLock<i32>>,
     api_hash: Arc<tokio::sync::RwLock<String>>,
@@ -55,6 +67,12 @@ impl TelegramManager {
             let mut hash_lock = self.api_hash.write().await;
             *hash_lock = api_hash;
         }
+        {
+            let mut pending = self.pending_login_token.lock().await;
+            *pending = None;
+            let mut pwd = self.pending_password_token.lock().await;
+            *pwd = None;
+        }
         self.connect().await
     }
 
@@ -63,14 +81,42 @@ impl TelegramManager {
     pub async fn connect(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let api_id = *self.api_id.read().await;
         let mut connection_params = grammers_mtsender::ConnectionParams::default();
-        if api_id == TELEGRAM_DESKTOP_APP_ID {
-            connection_params.device_model = "Telegram Desktop".to_string();
-            connection_params.system_version = "Linux 64-bit".to_string();
-            connection_params.app_version = "5.5.5".to_string();
-        } else {
-            connection_params.device_model = "Google Pixel 8".to_string();
-            connection_params.system_version = "Android 14".to_string();
-            connection_params.app_version = "10.14.5".to_string();
+        match api_id {
+            TELEGRAM_DESKTOP_APP_ID => {
+                connection_params.device_model = "Telegram Desktop".to_string();
+                connection_params.system_version = "Linux 64-bit".to_string();
+                connection_params.app_version = "5.5.5".to_string();
+            }
+            TELEGRAM_MACOS_APP_ID => {
+                connection_params.device_model = "MacBook Pro".to_string();
+                connection_params.system_version = "macOS 14.5".to_string();
+                connection_params.app_version = "10.14.0".to_string();
+            }
+            TELEGRAM_WEB_APP_ID => {
+                connection_params.device_model = "Telegram Web".to_string();
+                connection_params.system_version = "Chrome / Linux".to_string();
+                connection_params.app_version = "2.1.0".to_string();
+            }
+            TELEGRAM_IOS_APP_ID => {
+                connection_params.device_model = "iPhone 15 Pro".to_string();
+                connection_params.system_version = "iOS 17.5".to_string();
+                connection_params.app_version = "10.14.0".to_string();
+            }
+            TELEGRAM_ANDROID_X_APP_ID => {
+                connection_params.device_model = "Samsung SM-S928B".to_string();
+                connection_params.system_version = "Android 14 (SDK 34)".to_string();
+                connection_params.app_version = "0.26.8".to_string();
+            }
+            OFFICIAL_TELEGRAM_APP_ID => {
+                connection_params.device_model = "Google Pixel 8".to_string();
+                connection_params.system_version = "Android 14".to_string();
+                connection_params.app_version = "10.14.5".to_string();
+            }
+            _ => {
+                connection_params.device_model = "Yumigram Mobile".to_string();
+                connection_params.system_version = "Android 14".to_string();
+                connection_params.app_version = "1.0.8".to_string();
+            }
         }
 
         let session = Arc::new(FileSession::load_or_create(&self.session_file));
@@ -171,7 +217,11 @@ impl TelegramManager {
                     } else if err_name.contains("PHONE_NUMBER_BANNED") {
                         Err("Цей номер телефону заблоковано в Telegram.".into())
                     } else if err_name.contains("PHONE_NUMBER_FLOOD") {
-                        Err("Забагато запитів для цього номера. Зачекайте деякий час або увійдіть в офіційному Telegram.".into())
+                        Err("Забагато запитів для цього номера. Зачекайте деякий час або спробуйте інший API профіль.".into())
+                    } else if err_name.contains("API_ID_PUBLISHED_FLOOD") {
+                        Err("Telegram тимчасово обмежив цей API ID. Будь ласка, оберіть інший профіль (наприклад, macOS, WebK або Власний ID).".into())
+                    } else if err_name.contains("API_ID_INVALID") {
+                        Err("Вказано недійсний API ID або Hash. Перевірте введені дані.".into())
                     } else {
                         Err(format!("{}", err).into())
                     }
