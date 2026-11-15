@@ -387,7 +387,7 @@ fun MainAppContainer(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
-                    .padding(bottom = 12.dp, horizontal = 16.dp)
+                    .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
             )
         }
 
