@@ -21,7 +21,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -45,20 +44,32 @@ enum class IndicatorStyle(val title: String, val sent: String, val read: String)
 fun SettingsScreen(
     currentIndicator: IndicatorStyle,
     onIndicatorChanged: (IndicatorStyle) -> Unit,
-    onOpenPlugins: () -> Unit,
     onLogout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    var ghostEnabled by remember { mutableStateOf(true) }
-    var hideRead by remember { mutableStateOf(true) }
-    var hideTyping by remember { mutableStateOf(true) }
-    var hideOnline by remember { mutableStateOf(true) }
+    // Ghost Mode state is loaded from the real persisted configuration (Rust core + SQLite)
+    var ghostEnabled by remember { mutableStateOf(false) }
+    var hideRead by remember { mutableStateOf(false) }
+    var hideTyping by remember { mutableStateOf(false) }
+    var hideOnline by remember { mutableStateOf(false) }
+    var ghostLoaded by remember { mutableStateOf(false) }
 
-    var antiDeleteEnabled by remember { mutableStateOf(true) }
-    var antiEditEnabled by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        try {
+            val cfg = YumigramBridge.getGhostConfig()
+            hideRead = cfg.hide_read
+            hideTyping = cfg.hide_typing
+            hideOnline = cfg.hide_online
+            ghostEnabled = cfg.hide_read || cfg.hide_typing || cfg.hide_online
+        } catch (e: Throwable) {
+            android.util.Log.e("Yumigram", "getGhostConfig failed", e)
+        } finally {
+            ghostLoaded = true
+        }
+    }
 
     val currentThemeMode by ThemeManager.themeMode.collectAsState()
     val currentDynamicColor by ThemeManager.dynamicColor.collectAsState()
@@ -76,9 +87,7 @@ fun SettingsScreen(
     }
 
     var showIndicatorDialog by remember { mutableStateOf(false) }
-    var showPrivacySecurityDialog by remember { mutableStateOf(false) }
     var showChatAppearanceDialog by remember { mutableStateOf(false) }
-    var showStarsAndBusinessDialog by remember { mutableStateOf(false) }
 
     var isCheckingUpdates by remember { mutableStateOf(false) }
     var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
@@ -152,7 +161,8 @@ fun SettingsScreen(
                                         Text(
                                             text = when (mode) {
                                                 ThemeMode.SYSTEM -> "Система"
-                                                ThemeMode.DARK -> "Темна"
+                                                ThemeMode.DARK -> "Monet"
+                                                ThemeMode.AMOLED -> "AMOLED"
                                                 ThemeMode.LIGHT -> "Світла"
                                             },
                                             fontSize = 12.sp,
@@ -324,105 +334,10 @@ fun SettingsScreen(
                 }
             }
 
-            // PRIVACY & SECURITY
+            // CHAT SETTINGS, FONT SIZE
             item {
                 Text(
-                    text = "ПРИВАТНІСТЬ ТА БЕЗПЕКА (2FA, СЕСІЇ, КОД ДОСТУПУ)",
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(start = 12.dp, top = 8.dp)
-                )
-            }
-
-            item {
-                Card(
-                    shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showPrivacySecurityDialog = true }
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(42.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primaryContainer),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Rounded.Security, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(22.dp))
-                        }
-                        Spacer(modifier = Modifier.width(14.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Приватність і безпека", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                            Text("2FA, код доступу, сесії, хто бачить номер, таймер видалення", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        Icon(Icons.AutoMirrored.Rounded.ArrowForwardIos, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            }
-
-            // TELEGRAM STARS, PREMIUM & BUSINESS
-            item {
-                Text(
-                    text = "TELEGRAM STARS, ПРЕМІУМ ТА БІЗНЕС",
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(start = 12.dp, top = 8.dp)
-                )
-            }
-
-            item {
-                Card(
-                    shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showStarsAndBusinessDialog = true }
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(42.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFFFFA000).copy(alpha = 0.2f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("⭐", fontSize = 20.sp)
-                        }
-                        Spacer(modifier = Modifier.width(14.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("Зірки, Преміум та Бізнес", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Surface(
-                                    shape = RoundedCornerShape(6.dp),
-                                    color = Color(0xFFFFA000)
-                                ) {
-                                    Text("PRO", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.Black, modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp))
-                                }
-                            }
-                            Text("Баланс Stars, валюта TON/Gram, подарунки та бізнес", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        Icon(Icons.AutoMirrored.Rounded.ArrowForwardIos, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            }
-
-            // CHAT SETTINGS, FONT SIZE & BOT AUTOMATION
-            item {
-                Text(
-                    text = "НАЛАШТУВАННЯ ЧАТІВ, ШРИФТУ ТА БОТ",
+                    text = "НАЛАШТУВАННЯ ЧАТІВ ТА ШРИФТУ",
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(start = 12.dp, top = 8.dp)
@@ -450,12 +365,12 @@ fun SettingsScreen(
                                 .background(MaterialTheme.colorScheme.secondaryContainer),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(Icons.Rounded.SmartToy, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(22.dp))
+                            Icon(Icons.Rounded.Tune, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(22.dp))
                         }
                         Spacer(modifier = Modifier.width(14.dp))
                         Column(modifier = Modifier.weight(1f)) {
-                            Text("Шрифт, кольори імені та чат-бот", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                            Text("Розмір тексту, вбудований браузер, кути бульбашок та автовідповіді", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Шрифт та форма бульбашок", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                            Text("Розмір тексту повідомлень та кути бульбашок", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Icon(Icons.AutoMirrored.Rounded.ArrowForwardIos, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -549,22 +464,25 @@ fun SettingsScreen(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        SettingsToggleRow(
-                            icon = Icons.Rounded.DeleteForever,
-                            title = "Anti-Delete",
-                            subtitle = "Зберігати видалені співрозмовником повідомлення у локальній базі",
-                            checked = antiDeleteEnabled,
-                            onCheckedChange = { antiDeleteEnabled = it }
-                        )
-
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-
-                        SettingsToggleRow(
-                            icon = Icons.Rounded.HistoryEdu,
-                            title = "Anti-Edit",
-                            subtitle = "Фіксувати початковий текст до редагування",
-                            checked = antiEditEnabled,
-                            onCheckedChange = { antiEditEnabled = it }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Rounded.DeleteForever,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = "Збереження видаленого та редагованого",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Anti-Delete та Anti-Edit працюють постійно. Повідомлення, які співрозмовник видалив або відредагував, зберігаються у локальній базі разом з історією редагувань — у чаті вони позначаються міткою «Видалено».",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -648,58 +566,6 @@ fun SettingsScreen(
                 }
             }
 
-            // PLUGINS
-            item {
-                Card(
-                    shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onOpenPlugins() }
-                                .padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(38.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.tertiaryContainer),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Extension,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(14.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Менеджер розширень (Plugins)",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                Text(
-                                    text = "Керування активними плагінами та ШІ хуками",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.ArrowForwardIos,
-                                contentDescription = null,
-                                modifier = Modifier.size(14.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-            }
-
             // LOGOUT BUTTON
             item {
                 Button(
@@ -774,16 +640,8 @@ fun SettingsScreen(
         )
     }
 
-    if (showPrivacySecurityDialog) {
-        PrivacyAndSecurityDialog(onDismiss = { showPrivacySecurityDialog = false })
-    }
-
     if (showChatAppearanceDialog) {
         ChatAndAppearanceDialog(onDismiss = { showChatAppearanceDialog = false })
-    }
-
-    if (showStarsAndBusinessDialog) {
-        TelegramStarsAndBusinessScreen(onDismiss = { showStarsAndBusinessDialog = false })
     }
 
     // In-app Update Dialog

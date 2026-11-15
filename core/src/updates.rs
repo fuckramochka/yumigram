@@ -1,5 +1,5 @@
 use crate::db::LocalDatabase;
-use crate::models::{ChatItem, MessageItem};
+use crate::models::{ChatItem, MessageItem, UpdateEvent};
 use grammers_client::client::UpdateStream;
 use grammers_client::media::Media;
 use grammers_client::update::Update;
@@ -104,7 +104,7 @@ impl UpdatesEngine {
                         date: msg.date().as_second(),
                         is_outgoing: msg.outgoing(),
                         is_read: false,
-                        reply_to_id: None,
+                        reply_to_id: msg.reply_to_message_id(),
                         is_deleted: false,
                         original_text: None,
                         media_type,
@@ -115,12 +115,20 @@ impl UpdatesEngine {
                     let _ = self.db.save_message(&item);
 
                     // Update chat list row
-                    let chat_title = msg.peer().and_then(|p| p.name()).unwrap_or("Chat").to_string();
+                    let is_self = match msg.peer() {
+                        Some(grammers_client::peer::Peer::User(u)) => u.is_self(),
+                        _ => false,
+                    };
+                    let chat_title = if is_self {
+                        "Збережене".to_string()
+                    } else {
+                        msg.peer().and_then(|p| p.name()).unwrap_or("Chat").to_string()
+                    };
                     let chat_item = ChatItem {
                         id: chat_id,
                         title: chat_title,
                         username: None,
-                        chat_type: "dialog".into(),
+                        chat_type: if is_self { "user".into() } else { "dialog".into() },
                         unread_count: 0,
                         last_message_text: Some(msg.text().to_string()),
                         last_message_date: item.date,
@@ -130,20 +138,53 @@ impl UpdatesEngine {
                     };
                     let _ = self.db.save_chat(&chat_item);
 
-                    // Notify UI
-                    let _ = self.tx_event.send(format!("new_message:{}", chat_id));
+                    // Notify UI with structured event
+                    let ev = UpdateEvent {
+                        r#type: "new_message".to_string(),
+                        chat_id,
+                        message: Some(item),
+                        message_id: Some(msg.id()),
+                        msg_id: Some(msg.id()),
+                        text: Some(msg.text().to_string()),
+                    };
+                    if let Ok(json_str) = serde_json::to_string(&ev) {
+                        let _ = self.tx_event.send(json_str);
+                    }
                 }
                 Update::MessageEdited(msg) => {
                     let chat_id = msg.peer_id().bot_api_dialog_id_unchecked();
                     let _ = self.db.mark_message_edited(chat_id, msg.id(), msg.text());
-                    let _ = self.tx_event.send(format!("edit_message:{}:{}", chat_id, msg.id()));
+                    let ev = UpdateEvent {
+                        r#type: "edit_message".to_string(),
+                        chat_id,
+                        message: None,
+                        message_id: Some(msg.id()),
+                        msg_id: Some(msg.id()),
+                        text: Some(msg.text().to_string()),
+                    };
+                    if let Ok(json_str) = serde_json::to_string(&ev) {
+                        let _ = self.tx_event.send(json_str);
+                    }
                 }
                 Update::MessageDeleted(del) => {
                     // Anti-Delete in action: we do NOT erase, we mark deleted!
-                    let chat_id = del.channel_id().unwrap_or(0);
+                    let channel_chat_id = del.channel_id();
                     for &msg_id in del.messages() {
+                        let chat_id = channel_chat_id.unwrap_or_else(|| {
+                            self.db.get_message_chat_id(msg_id).ok().flatten().unwrap_or(0)
+                        });
                         let _ = self.db.mark_message_deleted(chat_id, msg_id);
-                        let _ = self.tx_event.send(format!("delete_message:{}:{}", chat_id, msg_id));
+                        let ev = UpdateEvent {
+                            r#type: "delete_message".to_string(),
+                            chat_id,
+                            message: None,
+                            message_id: Some(msg_id),
+                            msg_id: Some(msg_id),
+                            text: None,
+                        };
+                        if let Ok(json_str) = serde_json::to_string(&ev) {
+                            let _ = self.tx_event.send(json_str);
+                        }
                     }
                 }
                 _ => {}

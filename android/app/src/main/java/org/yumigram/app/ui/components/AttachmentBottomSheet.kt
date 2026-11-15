@@ -31,6 +31,11 @@ data class AttachmentAction(
     val onClick: () -> Unit
 )
 
+/**
+ * Реальні дії вкладень: усе, що надсилається через MTProto (nativeSendMedia).
+ * Вигадані надсилання геопозиції та контактів видалено — Rust-ядро
+ * підтримує лише photo/video/file/audio/video_note.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AttachmentBottomSheet(
@@ -39,13 +44,8 @@ fun AttachmentBottomSheet(
     onSendVideo: (Uri) -> Unit,
     onSendFile: (Uri) -> Unit,
     onSendAudio: (Uri) -> Unit,
-    onSendLocation: (String) -> Unit,
-    onSendContact: (String) -> Unit,
     onRecordVideoNote: () -> Unit
 ) {
-    var showLocationPrompt by remember { mutableStateOf(false) }
-    var showContactPrompt by remember { mutableStateOf(false) }
-
     val photoLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -95,12 +95,6 @@ fun AttachmentBottomSheet(
             },
             AttachmentAction("Музика", Icons.Rounded.MusicNote, Color(0xFFFFA726)) {
                 audioLauncher.launch("audio/*")
-            },
-            AttachmentAction("Геопозиція", Icons.Rounded.LocationOn, Color(0xFF26A69A)) {
-                showLocationPrompt = true
-            },
-            AttachmentAction("Контакт", Icons.Rounded.Person, Color(0xFF7E57C2)) {
-                showContactPrompt = true
             },
             AttachmentAction("Кружечок", Icons.Rounded.RadioButtonChecked, Color(0xFF00E5FF)) {
                 onRecordVideoNote()
@@ -170,80 +164,5 @@ fun AttachmentBottomSheet(
                 }
             }
         }
-    }
-
-    // Quick Geolocation Prompt Dialog
-    if (showLocationPrompt) {
-        var customLoc by remember { mutableStateOf("Київ, вул. Хрещатик, 22") }
-        AlertDialog(
-            onDismissRequest = { showLocationPrompt = false },
-            title = { Text("Надіслати геопозицію") },
-            text = {
-                Column {
-                    Text("Вкажіть адресу або відправте поточну геопозицію:")
-                    Spacer(modifier = Modifier.height(10.dp))
-                    OutlinedTextField(
-                        value = customLoc,
-                        onValueChange = { customLoc = it },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
-            confirmButton = {
-                Button(onClick = {
-                    onSendLocation("📍 $customLoc")
-                    showLocationPrompt = false
-                    onDismiss()
-                }) {
-                    Text("Надіслати")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showLocationPrompt = false }) {
-                    Text("Скасувати")
-                }
-            }
-        )
-    }
-
-    // Quick Contact Prompt Dialog
-    if (showContactPrompt) {
-        var contactName by remember { mutableStateOf("Тарас Шевченко") }
-        var contactPhone by remember { mutableStateOf("+380 67 123 45 67") }
-        AlertDialog(
-            onDismissRequest = { showContactPrompt = false },
-            title = { Text("Надіслати контакт") },
-            text = {
-                Column {
-                    OutlinedTextField(
-                        value = contactName,
-                        onValueChange = { contactName = it },
-                        label = { Text("Ім'я контакту") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = contactPhone,
-                        onValueChange = { contactPhone = it },
-                        label = { Text("Номер телефону") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
-            confirmButton = {
-                Button(onClick = {
-                    onSendContact("👤 Контакт: $contactName · $contactPhone")
-                    showContactPrompt = false
-                    onDismiss()
-                }) {
-                    Text("Поділитись")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showContactPrompt = false }) {
-                    Text("Скасувати")
-                }
-            }
-        )
     }
 }

@@ -7,7 +7,8 @@ import kotlinx.coroutines.flow.StateFlow
 
 enum class ThemeMode(val title: String) {
     SYSTEM("Системна (як у Pixel OS)"),
-    DARK("Темна"),
+    DARK("Pixel Dark Monet"),
+    AMOLED("True AMOLED Pure Black"),
     LIGHT("Світла")
 }
 
@@ -25,11 +26,11 @@ enum class ChatWallpaper(
     val bubbleIncoming: Color,
     val bubbleOutgoing: Color
 ) {
-    DEFAULT("Pixel Dark", Color(0xFF0F141C), Color(0xFF1E2633), Color(0xFF1A73E8)),
-    SLATE("Графіт AMOLED", Color(0xFF121212), Color(0xFF242424), Color(0xFF2E7D32)),
+    DEFAULT("Pixel Dark", Color(0xFF0E1014), Color(0xFF232730), Color(0xFF1A73E8)),
+    SLATE("Графіт AMOLED", Color(0xFF000000), Color(0xFF16181E), Color(0xFF2E7D32)),
     OCEAN("Океанський бриз", Color(0xFF0B192C), Color(0xFF1E3E62), Color(0xFF00ADB5)),
     VELVET("Оксамит", Color(0xFF1A0B2E), Color(0xFF2E1752), Color(0xFF9C27B0)),
-    LIGHT_MINIMAL("Світлий папір", Color(0xFFF5F7FA), Color(0xFFFFFFFF), Color(0xFF1A73E8))
+    LIGHT_MINIMAL("Світлий папір", Color(0xFFF6F7FB), Color(0xFFFFFFFF), Color(0xFF1A73E8))
 }
 
 object ThemeManager {
@@ -40,6 +41,9 @@ object ThemeManager {
 
     private val _dynamicColor = MutableStateFlow(true)
     val dynamicColor: StateFlow<Boolean> = _dynamicColor
+
+    private val _isAmoled = MutableStateFlow(false)
+    val isAmoled: StateFlow<Boolean> = _isAmoled
 
     private val _accentPalette = MutableStateFlow(AccentPalette.PIXEL_BLUE)
     val accentPalette: StateFlow<AccentPalette> = _accentPalette
@@ -53,25 +57,15 @@ object ThemeManager {
     private val _fontSize = MutableStateFlow(15f)
     val fontSize: StateFlow<Float> = _fontSize
 
-    private val _nameColorIndex = MutableStateFlow(0)
-    val nameColorIndex: StateFlow<Int> = _nameColorIndex
-
-    private val _inAppBrowserEnabled = MutableStateFlow(true)
-    val inAppBrowserEnabled: StateFlow<Boolean> = _inAppBrowserEnabled
-
-    private val _bubbleCornerRadius = MutableStateFlow(18)
+    private val _bubbleCornerRadius = MutableStateFlow(20)
     val bubbleCornerRadius: StateFlow<Int> = _bubbleCornerRadius
-
-    private val _autoReplyEnabled = MutableStateFlow(false)
-    val autoReplyEnabled: StateFlow<Boolean> = _autoReplyEnabled
-
-    private val _autoReplyMessage = MutableStateFlow("Зараз я не в мережі. Відповім якнайшвидше! (Yumigram Auto-Reply)")
-    val autoReplyMessage: StateFlow<String> = _autoReplyMessage
 
     fun init(context: Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val modeStr = prefs.getString("theme_mode", ThemeMode.SYSTEM.name) ?: ThemeMode.SYSTEM.name
         _themeMode.value = try { ThemeMode.valueOf(modeStr) } catch (_: Exception) { ThemeMode.SYSTEM }
+
+        _isAmoled.value = prefs.getBoolean("is_amoled", false) || _themeMode.value == ThemeMode.AMOLED
 
         _dynamicColor.value = prefs.getBoolean("dynamic_color", true)
 
@@ -83,17 +77,33 @@ object ThemeManager {
 
         _customWallpaperUri.value = prefs.getString("custom_wallpaper_uri", null)
         _fontSize.value = prefs.getFloat("font_size", 15f)
-        _nameColorIndex.value = prefs.getInt("name_color_index", 0)
-        _inAppBrowserEnabled.value = prefs.getBoolean("in_app_browser", true)
-        _bubbleCornerRadius.value = prefs.getInt("bubble_corner_radius", 18)
-        _autoReplyEnabled.value = prefs.getBoolean("auto_reply_enabled", false)
-        _autoReplyMessage.value = prefs.getString("auto_reply_message", "Зараз я не в мережі. Відповім якнайшвидше! (Yumigram Auto-Reply)") ?: "Зараз я не в мережі."
+        _bubbleCornerRadius.value = prefs.getInt("bubble_corner_radius", 20)
     }
 
     fun setThemeMode(context: Context, mode: ThemeMode) {
         _themeMode.value = mode
+        if (mode == ThemeMode.AMOLED) {
+            _isAmoled.value = true
+        } else if (mode == ThemeMode.LIGHT) {
+            _isAmoled.value = false
+        }
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit().putString("theme_mode", mode.name).apply()
+            .edit()
+            .putString("theme_mode", mode.name)
+            .putBoolean("is_amoled", _isAmoled.value)
+            .apply()
+    }
+
+    fun setAmoled(context: Context, enabled: Boolean) {
+        _isAmoled.value = enabled
+        if (enabled && _themeMode.value != ThemeMode.DARK) {
+            _themeMode.value = ThemeMode.AMOLED
+        }
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean("is_amoled", enabled)
+            .putString("theme_mode", _themeMode.value.name)
+            .apply()
     }
 
     fun setDynamicColor(context: Context, enabled: Boolean) {
@@ -126,33 +136,9 @@ object ThemeManager {
             .edit().putFloat("font_size", size).apply()
     }
 
-    fun setNameColorIndex(context: Context, index: Int) {
-        _nameColorIndex.value = index
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit().putInt("name_color_index", index).apply()
-    }
-
-    fun setInAppBrowserEnabled(context: Context, enabled: Boolean) {
-        _inAppBrowserEnabled.value = enabled
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit().putBoolean("in_app_browser", enabled).apply()
-    }
-
     fun setBubbleCornerRadius(context: Context, radius: Int) {
         _bubbleCornerRadius.value = radius
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit().putInt("bubble_corner_radius", radius).apply()
-    }
-
-    fun setAutoReplyEnabled(context: Context, enabled: Boolean) {
-        _autoReplyEnabled.value = enabled
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit().putBoolean("auto_reply_enabled", enabled).apply()
-    }
-
-    fun setAutoReplyMessage(context: Context, message: String) {
-        _autoReplyMessage.value = message
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit().putString("auto_reply_message", message).apply()
     }
 }

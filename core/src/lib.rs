@@ -1,32 +1,30 @@
 pub mod models;
 pub mod db;
 pub mod ghost;
-pub mod agent;
-pub mod ai;
+pub mod actions;
 pub mod client;
 pub mod session;
 pub mod updates;
-pub mod plugins;
 
 use db::LocalDatabase;
 use ghost::GhostManager;
-use agent::AgentExecutor;
+use actions::ActionExecutor;
 use client::TelegramManager;
-use plugins::PluginManager;
-use models::{ChatItem, GhostConfig, AgentActionRequest};
+use models::{ChatItem, GhostConfig, ActionRequest};
 
 use jni::objects::{JClass, JString};
 use jni::sys::{jboolean, jint, jlong, jstring};
 use jni::JNIEnv;
-use std::sync::{Arc, OnceLock};
+use std::collections::VecDeque;
+use std::sync::{Arc, Mutex as StdMutex, OnceLock};
 
 struct AppState {
     db: Arc<LocalDatabase>,
     ghost: Arc<GhostManager>,
-    agent: Arc<AgentExecutor>,
-    plugins: Arc<PluginManager>,
+    actions: Arc<ActionExecutor>,
     tg: Arc<TelegramManager>,
     rt: Arc<tokio::runtime::Runtime>,
+    event_queue: Arc<StdMutex<VecDeque<String>>>,
 }
 
 static STATE: OnceLock<AppState> = OnceLock::new();
@@ -40,6 +38,28 @@ fn safe_jstring(env: &mut JNIEnv, s: &str) -> jstring {
         Ok(js) => js.into_raw(),
         Err(_) => std::ptr::null_mut(),
     }
+}
+
+fn spawn_updates_stream(
+    tg: Arc<TelegramManager>,
+    db: Arc<LocalDatabase>,
+    event_queue: Arc<StdMutex<VecDeque<String>>>,
+) {
+    let (tx, mut rx) = tokio::sync::broadcast::channel(200);
+    let q = event_queue.clone();
+    tokio::spawn(async move {
+        while let Ok(event_json) = rx.recv().await {
+            let mut queue = q.lock().unwrap();
+            if queue.len() >= 200 {
+                queue.pop_front();
+            }
+            queue.push_back(event_json);
+        }
+    });
+    tokio::spawn(async move {
+        let _ = tg.get_me().await;
+        let _ = tg.start_updates_stream(db, tx).await;
+    });
 }
 
 #[unsafe(no_mangle)]
@@ -77,9 +97,16 @@ pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeInit(
             Ok(db_inst) => {
                 let db = Arc::new(db_inst);
                 let tg = Arc::new(TelegramManager::new(session_p));
-                let ghost = Arc::new(GhostManager::new(GhostConfig::default()));
-                let agent = Arc::new(AgentExecutor::new(db.clone(), Some(tg.clone())));
-                let plugins = Arc::new(PluginManager::new(db.clone()));
+
+                // Restore persisted Ghost Mode settings from SQLite so the
+                // in-memory manager matches what the user actually configured.
+                let ghost_cfg = GhostConfig {
+                    hide_read: db.get_setting("ghost_hide_read").ok().flatten().map(|v| v == "1").unwrap_or(false),
+                    hide_typing: db.get_setting("ghost_hide_typing").ok().flatten().map(|v| v == "1").unwrap_or(false),
+                    hide_online: db.get_setting("ghost_hide_online").ok().flatten().map(|v| v == "1").unwrap_or(false),
+                };
+                let ghost = Arc::new(GhostManager::new(ghost_cfg));
+                let actions = Arc::new(ActionExecutor::new(db.clone(), Some(tg.clone())));
 
                 let rt = match tokio::runtime::Builder::new_multi_thread()
                     .enable_all()
@@ -89,17 +116,19 @@ pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeInit(
                     Err(_) => return 0,
                 };
 
+                let event_queue = Arc::new(StdMutex::new(VecDeque::with_capacity(200)));
+
                 // Connect in background runtime and start updates if already authorized
                 let tg_clone = tg.clone();
                 let db_clone = db.clone();
+                let q_clone = event_queue.clone();
                 rt.spawn(async move {
                     if tg_clone.connect().await.is_ok() && tg_clone.is_authorized().await {
-                        let (tx, _rx) = tokio::sync::broadcast::channel(100);
-                        let _ = tg_clone.start_updates_stream(db_clone, tx).await;
+                        spawn_updates_stream(tg_clone, db_clone, q_clone);
                     }
                 });
 
-                let app_state = AppState { db, ghost, agent, plugins, tg, rt };
+                let app_state = AppState { db, ghost, actions, tg, rt, event_queue };
                 let _ = STATE.set(app_state);
                 1
             }
@@ -210,11 +239,7 @@ pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeSignIn(
                     if status == "2FA_REQUIRED" {
                         "{\"success\":true,\"status\":\"2FA_REQUIRED\"}".to_string()
                     } else {
-                        let tg_stream = tg.clone();
-                        state.rt.spawn(async move {
-                            let (tx, _rx) = tokio::sync::broadcast::channel(100);
-                            let _ = tg_stream.start_updates_stream(db, tx).await;
-                        });
+                        spawn_updates_stream(tg.clone(), db.clone(), state.event_queue.clone());
                         format!("{{\"success\":true,\"status\":\"SUCCESS\",\"name\":\"{}\"}}", status)
                     }
                 }
@@ -246,11 +271,7 @@ pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeCheckPa
             let db = state.db.clone();
             match state.rt.block_on(tg.check_password(&pwd_str)) {
                 Ok(_) => {
-                    let tg_stream = tg.clone();
-                    state.rt.spawn(async move {
-                        let (tx, _rx) = tokio::sync::broadcast::channel(100);
-                        let _ = tg_stream.start_updates_stream(db, tx).await;
-                    });
+                    spawn_updates_stream(tg.clone(), db.clone(), state.event_queue.clone());
                     "{\"success\":true}".to_string()
                 }
                 Err(e) => format!("{{\"success\":false,\"message\":\"{}\"}}", e),
@@ -319,18 +340,20 @@ pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeSendMes
     _class: JClass,
     chat_id: jlong,
     text: JString,
+    reply_to_id: jint,
 ) -> jstring {
     let raw_text: String = match env.get_string(&text) {
         Ok(s) => s.into(),
         Err(_) => return safe_jstring(&mut env, "{\"success\":false}"),
     };
 
+    let reply_id = if reply_to_id > 0 { Some(reply_to_id as i32) } else { None };
+
     let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         if let Some(state) = get_state() {
-            let transformed_text = state.plugins.process_outgoing_message(chat_id, raw_text);
             let tg = state.tg.clone();
             let db = state.db.clone();
-            match state.rt.block_on(tg.send_message(&db, chat_id, &transformed_text)) {
+            match state.rt.block_on(tg.send_message(&db, chat_id, &raw_text, reply_id)) {
                 Ok(msg) => serde_json::to_string(&msg).unwrap_or_else(|_| "{\"success\":false}".into()),
                 Err(e) => format!("{{\"success\":false,\"message\":\"{}\"}}", e),
             }
@@ -352,6 +375,7 @@ pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeSendMed
     media_type: JString,
     caption: JString,
     duration: jint,
+    reply_to_id: jint,
 ) -> jstring {
     let raw_file_path: String = match env.get_string(&file_path) {
         Ok(s) => s.into(),
@@ -366,6 +390,8 @@ pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeSendMed
         Err(_) => String::new(),
     };
 
+    let reply_id = if reply_to_id > 0 { Some(reply_to_id as i32) } else { None };
+
     let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         if let Some(state) = get_state() {
             let tg = state.tg.clone();
@@ -377,6 +403,113 @@ pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeSendMed
                 &raw_media_type,
                 &raw_caption,
                 duration as i32,
+                reply_id,
+            )) {
+                Ok(msg) => serde_json::to_string(&msg).unwrap_or_else(|_| "{\"success\":false}".into()),
+                Err(e) => format!("{{\"success\":false,\"message\":\"{}\"}}", e),
+            }
+        } else {
+            "{\"success\":false,\"message\":\"State not initialized\"}".to_string()
+        }
+    }));
+
+    let result = res.unwrap_or_else(|_| "{\"success\":false,\"message\":\"Internal panic\"}".to_string());
+    safe_jstring(&mut env, &result)
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeForwardMessages(
+    mut env: JNIEnv,
+    _class: JClass,
+    from_chat_id: jlong,
+    to_chat_id: jlong,
+    message_ids_json: JString,
+) -> jstring {
+    let raw_ids_json: String = match env.get_string(&message_ids_json) {
+        Ok(s) => s.into(),
+        Err(_) => return safe_jstring(&mut env, "[]"),
+    };
+
+    let ids: Vec<i32> = serde_json::from_str(&raw_ids_json).unwrap_or_default();
+    let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        if let Some(state) = get_state() {
+            let tg = state.tg.clone();
+            let db = state.db.clone();
+            match state.rt.block_on(tg.forward_messages(&db, from_chat_id, to_chat_id, ids)) {
+                Ok(msgs) => serde_json::to_string(&msgs).unwrap_or_else(|_| "[]".into()),
+                Err(e) => {
+                    log::error!("nativeForwardMessages failed: {}", e);
+                    "[]".to_string()
+                }
+            }
+        } else {
+            "[]".to_string()
+        }
+    }));
+
+    let result = res.unwrap_or_else(|_| "[]".to_string());
+    safe_jstring(&mut env, &result)
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeGetStickers(
+    mut env: JNIEnv,
+    _class: JClass,
+    cache_dir: JString,
+) -> jstring {
+    let raw_cache_dir: String = match env.get_string(&cache_dir) {
+        Ok(s) => s.into(),
+        Err(_) => return safe_jstring(&mut env, "[]"),
+    };
+
+    let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        if let Some(state) = get_state() {
+            let tg = state.tg.clone();
+            match state.rt.block_on(tg.get_installed_stickers(&raw_cache_dir)) {
+                Ok(stickers) => serde_json::to_string(&stickers).unwrap_or_else(|_| "[]".into()),
+                Err(e) => {
+                    log::error!("nativeGetStickers failed: {}", e);
+                    "[]".to_string()
+                }
+            }
+        } else {
+            "[]".to_string()
+        }
+    }));
+
+    let result = res.unwrap_or_else(|_| "[]".to_string());
+    safe_jstring(&mut env, &result)
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeSendSticker(
+    mut env: JNIEnv,
+    _class: JClass,
+    chat_id: jlong,
+    doc_id: jlong,
+    access_hash: jlong,
+    file_ref_hex: JString,
+    reply_to_id: jint,
+) -> jstring {
+    let raw_file_ref_hex: String = match env.get_string(&file_ref_hex) {
+        Ok(s) => s.into(),
+        Err(_) => return safe_jstring(&mut env, "{\"success\":false}"),
+    };
+
+    let file_ref = client::hex_to_bytes(&raw_file_ref_hex);
+    let reply_id = if reply_to_id > 0 { Some(reply_to_id as i32) } else { None };
+
+    let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        if let Some(state) = get_state() {
+            let tg = state.tg.clone();
+            let db = state.db.clone();
+            match state.rt.block_on(tg.send_sticker(
+                &db,
+                chat_id,
+                doc_id,
+                access_hash,
+                &file_ref,
+                reply_id,
             )) {
                 Ok(msg) => serde_json::to_string(&msg).unwrap_or_else(|_| "{\"success\":false}".into()),
                 Err(e) => format!("{{\"success\":false,\"message\":\"{}\"}}", e),
@@ -543,17 +676,40 @@ pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeSetGhos
 ) {
     let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         if let Some(state) = get_state() {
-            state.ghost.update_config(GhostConfig {
+            let config = GhostConfig {
                 hide_read: hide_read != 0,
                 hide_typing: hide_typing != 0,
                 hide_online: hide_online != 0,
-            });
+            };
+            // Persist to SQLite so the setting survives an app restart.
+            let _ = state.db.set_setting("ghost_hide_read", if config.hide_read { "1" } else { "0" });
+            let _ = state.db.set_setting("ghost_hide_typing", if config.hide_typing { "1" } else { "0" });
+            let _ = state.db.set_setting("ghost_hide_online", if config.hide_online { "1" } else { "0" });
+            state.ghost.update_config(config);
         }
     }));
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeExecuteAgentAction(
+pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeGetGhostConfig(
+    mut env: JNIEnv,
+    _class: JClass,
+) -> jstring {
+    let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        if let Some(state) = get_state() {
+            let cfg = state.ghost.get_config();
+            serde_json::to_string(&cfg).unwrap_or_else(|_| "{}".into())
+        } else {
+            "{}".to_string()
+        }
+    }));
+
+    let result = res.unwrap_or_else(|_| "{}".to_string());
+    safe_jstring(&mut env, &result)
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeExecuteAction(
     mut env: JNIEnv,
     _class: JClass,
     action_json: JString,
@@ -564,9 +720,9 @@ pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeExecute
     };
 
     let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        if let Ok(request) = serde_json::from_str::<AgentActionRequest>(&json_str) {
+        if let Ok(request) = serde_json::from_str::<ActionRequest>(&json_str) {
             if let Some(state) = get_state() {
-                let r = state.rt.block_on(state.agent.execute_action(request));
+                let r = state.rt.block_on(state.actions.execute_action(request));
                 serde_json::to_string(&r).unwrap_or_else(|_| "{\"success\":false}".into())
             } else {
                 "{\"success\":false,\"message\":\"State not initialized\"}".into()
@@ -578,46 +734,6 @@ pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeExecute
 
     let result = res.unwrap_or_else(|_| "{\"success\":false,\"message\":\"Internal panic\"}".to_string());
     safe_jstring(&mut env, &result)
-}
-
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeListPlugins(
-    mut env: JNIEnv,
-    _class: JClass,
-) -> jstring {
-    let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        if let Some(state) = get_state() {
-            let plugins = state.plugins.list_plugins();
-            serde_json::to_string(&plugins).unwrap_or_else(|_| "[]".into())
-        } else {
-            "[]".into()
-        }
-    }));
-
-    let result = res.unwrap_or_else(|_| "[]".to_string());
-    safe_jstring(&mut env, &result)
-}
-
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeSetPluginEnabled(
-    mut env: JNIEnv,
-    _class: JClass,
-    plugin_id: JString,
-    enabled: jboolean,
-) -> jboolean {
-    let id_str: String = match env.get_string(&plugin_id) {
-        Ok(s) => s.into(),
-        Err(_) => return 0,
-    };
-
-    let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        if let Some(state) = get_state() {
-            if state.plugins.set_plugin_enabled(&id_str, enabled != 0).is_ok() { 1 } else { 0 }
-        } else {
-            0
-        }
-    }));
-    res.unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]
@@ -678,5 +794,62 @@ pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeDownloa
     }));
 
     let result = res.unwrap_or_default();
+    safe_jstring(&mut env, &result)
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeGetMe(
+    mut env: JNIEnv,
+    _class: JClass,
+) -> jstring {
+    let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        if let Some(state) = get_state() {
+            let tg = state.tg.clone();
+            match state.rt.block_on(tg.get_me()) {
+                Ok(user) => {
+                    let user_id = user.id().bot_api_dialog_id_unchecked();
+                    let first_name = user.first_name().unwrap_or("").to_string();
+                    let username = user.username().map(|s| s.to_string());
+                    let u = crate::models::UserModel {
+                        id: user_id,
+                        first_name,
+                        username,
+                    };
+                    serde_json::to_string(&u).unwrap_or_else(|_| "{}".into())
+                }
+                Err(e) => {
+                    log::error!("nativeGetMe error: {}", e);
+                    "{}".to_string()
+                }
+            }
+        } else {
+            "{}".to_string()
+        }
+    }));
+
+    let result = res.unwrap_or_else(|_| "{}".to_string());
+    safe_jstring(&mut env, &result)
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativePollEvents(
+    mut env: JNIEnv,
+    _class: JClass,
+) -> jstring {
+    let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        if let Some(state) = get_state() {
+            let mut queue = state.event_queue.lock().unwrap();
+            if queue.is_empty() {
+                "[]".to_string()
+            } else {
+                let events: Vec<String> = queue.drain(..).collect();
+                format!("[{}]", events.join(","))
+            }
+        } else {
+            "[]".to_string()
+        }
+    }));
+
+    let result = res.unwrap_or_else(|_| "[]".to_string());
     safe_jstring(&mut env, &result)
 }

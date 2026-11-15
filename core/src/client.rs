@@ -2,13 +2,14 @@ use grammers_client::client::{LoginToken, PasswordToken, SignInError};
 use grammers_client::Client;
 use grammers_client::message::InputMessage;
 use grammers_client::media::Attribute;
+use grammers_client::peer::User;
 use grammers_mtsender::{SenderPool, UpdatesConfiguration};
 use grammers_tl_types as tl;
 use crate::session::FileSession;
 use grammers_session::types::PeerRef;
 use grammers_session::updates::UpdatesLike;
 use crate::db::LocalDatabase;
-use crate::models::{ChatItem, MessageItem};
+use crate::models::{ChatItem, MessageItem, StickerModel};
 use crate::updates::UpdatesEngine;
 use std::collections::HashMap;
 use std::path::Path;
@@ -42,6 +43,7 @@ pub struct TelegramManager {
     pending_login_token: Arc<Mutex<Option<LoginToken>>>,
     pending_password_token: Arc<Mutex<Option<PasswordToken>>>,
     peer_cache: Arc<Mutex<HashMap<i64, PeerRef>>>,
+    my_user_id: Arc<Mutex<Option<i64>>>,
 }
 
 impl TelegramManager {
@@ -55,6 +57,7 @@ impl TelegramManager {
             pending_login_token: Arc::new(Mutex::new(None)),
             pending_password_token: Arc::new(Mutex::new(None)),
             peer_cache: Arc::new(Mutex::new(HashMap::new())),
+            my_user_id: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -150,6 +153,44 @@ impl TelegramManager {
             client.is_authorized().await.unwrap_or(false)
         } else {
             false
+        }
+    }
+
+    /// Fetches the currently authorized Telegram user and caches ID & peer ref
+    pub async fn get_me(&self) -> Result<User, Box<dyn std::error::Error + Send + Sync>> {
+        let client_lock = self.client.lock().await;
+        if let Some(client) = client_lock.as_ref() {
+            let me = client.get_me().await?;
+            let user_id = me.id().bot_api_dialog_id_unchecked();
+            *self.my_user_id.lock().await = Some(user_id);
+
+            let mut cache = self.peer_cache.lock().await;
+            cache.insert(user_id, PeerRef::from(tl::enums::InputPeer::PeerSelf));
+            cache.insert(0, PeerRef::from(tl::enums::InputPeer::PeerSelf));
+
+            Ok(me)
+        } else {
+            Err("Клієнт не підключений".into())
+        }
+    }
+
+    pub async fn get_cached_my_user_id(&self) -> Option<i64> {
+        *self.my_user_id.lock().await
+    }
+
+    async fn resolve_peer_ref(
+        &self,
+        cache: &HashMap<i64, PeerRef>,
+        chat_id: i64,
+    ) -> Option<PeerRef> {
+        let is_self = {
+            let my_id = *self.my_user_id.lock().await;
+            my_id.map(|id| id == chat_id).unwrap_or(false) || chat_id == 0
+        };
+        if is_self {
+            Some(PeerRef::from(tl::enums::InputPeer::PeerSelf))
+        } else {
+            cache.get(&chat_id).copied()
         }
     }
 
@@ -295,7 +336,7 @@ impl TelegramManager {
 
             while let Some(dialog) = dialogs.next().await? {
                 let chat_id = dialog.peer.id().bot_api_dialog_id_unchecked();
-                let title = dialog.peer.name().unwrap_or("Без назви").to_string();
+                let mut title = dialog.peer.name().unwrap_or("Без назви").to_string();
                 let username = dialog.peer.username().map(|u| u.to_string());
                 let chat_type = match &dialog.peer {
                     grammers_client::peer::Peer::User(_) => "user",
@@ -304,7 +345,20 @@ impl TelegramManager {
                     grammers_client::peer::Peer::Community(_) => "channel",
                 };
 
-                if let Ok(Some(peer_ref)) = dialog.peer.to_ref().await {
+                let is_self_dialog = match &dialog.peer {
+                    grammers_client::peer::Peer::User(u) => u.is_self(),
+                    _ => false,
+                } || {
+                    let my_id = *self.my_user_id.lock().await;
+                    my_id.map(|id| id == chat_id).unwrap_or(false)
+                };
+
+                if is_self_dialog {
+                    *self.my_user_id.lock().await = Some(chat_id);
+                    cache.insert(chat_id, PeerRef::from(tl::enums::InputPeer::PeerSelf));
+                    cache.insert(0, PeerRef::from(tl::enums::InputPeer::PeerSelf));
+                    title = "Збережене".to_string();
+                } else if let Ok(Some(peer_ref)) = dialog.peer.to_ref().await {
                     cache.insert(chat_id, peer_ref);
                 }
 
@@ -348,8 +402,9 @@ impl TelegramManager {
     ) -> Result<Vec<MessageItem>, Box<dyn std::error::Error + Send + Sync>> {
         let client_lock = self.client.lock().await;
         let cache = self.peer_cache.lock().await;
+        let peer_ref = self.resolve_peer_ref(&cache, chat_id).await;
 
-        if let (Some(client), Some(&peer_ref)) = (client_lock.as_ref(), cache.get(&chat_id)) {
+        if let (Some(client), Some(peer_ref)) = (client_lock.as_ref(), peer_ref) {
             let mut iter = client.iter_messages(peer_ref);
             let mut result = Vec::new();
 
@@ -427,7 +482,7 @@ impl TelegramManager {
                     date: msg.date().as_second(),
                     is_outgoing: msg.outgoing(),
                     is_read: false,
-                    reply_to_id: None,
+                    reply_to_id: msg.reply_to_message_id(),
                     is_deleted: false,
                     original_text: None,
                     media_type,
@@ -455,12 +510,18 @@ impl TelegramManager {
         db: &LocalDatabase,
         chat_id: i64,
         text: &str,
+        reply_to_id: Option<i32>,
     ) -> Result<MessageItem, Box<dyn std::error::Error + Send + Sync>> {
         let client_lock = self.client.lock().await;
         let cache = self.peer_cache.lock().await;
+        let peer_ref = self.resolve_peer_ref(&cache, chat_id).await;
 
-        if let (Some(client), Some(&peer_ref)) = (client_lock.as_ref(), cache.get(&chat_id)) {
-            let sent = client.send_message(peer_ref, text).await?;
+        if let (Some(client), Some(peer_ref)) = (client_lock.as_ref(), peer_ref) {
+            let mut input_msg = InputMessage::new().text(text);
+            if reply_to_id.is_some() {
+                input_msg = input_msg.reply_to(reply_to_id);
+            }
+            let sent = client.send_message(peer_ref, input_msg).await?;
             let item = MessageItem {
                 id: sent.id(),
                 chat_id,
@@ -470,7 +531,7 @@ impl TelegramManager {
                 date: sent.date().as_second(),
                 is_outgoing: true,
                 is_read: false,
-                reply_to_id: None,
+                reply_to_id,
                 is_deleted: false,
                 original_text: None,
                 media_type: None,
@@ -493,14 +554,19 @@ impl TelegramManager {
         media_type: &str,
         caption: &str,
         duration: i32,
+        reply_to_id: Option<i32>,
     ) -> Result<MessageItem, Box<dyn std::error::Error + Send + Sync>> {
         let client_lock = self.client.lock().await;
         let cache = self.peer_cache.lock().await;
+        let peer_ref = self.resolve_peer_ref(&cache, chat_id).await;
 
-        if let (Some(client), Some(&peer_ref)) = (client_lock.as_ref(), cache.get(&chat_id)) {
+        if let (Some(client), Some(peer_ref)) = (client_lock.as_ref(), peer_ref) {
             let mut input_msg = InputMessage::new();
             if !caption.is_empty() {
                 input_msg = input_msg.text(caption);
+            }
+            if reply_to_id.is_some() {
+                input_msg = input_msg.reply_to(reply_to_id);
             }
 
             match media_type {
@@ -592,36 +658,6 @@ impl TelegramManager {
                         },
                     );
                 }
-                "location" => {
-                    let coords: Vec<&str> = file_path.split(',').collect();
-                    let (lat, lon) = if coords.len() == 2 {
-                        (
-                            coords[0].trim().parse::<f64>().unwrap_or(50.4501),
-                            coords[1].trim().parse::<f64>().unwrap_or(30.5234),
-                        )
-                    } else {
-                        (50.4501, 30.5234)
-                    };
-                    input_msg = input_msg.media(tl::types::InputMediaGeoPoint {
-                        geo_point: tl::enums::InputGeoPoint::Point(tl::types::InputGeoPoint {
-                            lat,
-                            long: lon,
-                            accuracy_radius: None,
-                        }),
-                    });
-                }
-                "contact" => {
-                    let parts: Vec<&str> = file_path.split('|').collect();
-                    let phone = parts.first().unwrap_or(&"+380680000000").to_string();
-                    let first_name = parts.get(1).unwrap_or(&"Контакт").to_string();
-                    let last_name = parts.get(2).unwrap_or(&"").to_string();
-                    input_msg = input_msg.media(tl::types::InputMediaContact {
-                        phone_number: phone,
-                        first_name,
-                        last_name,
-                        vcard: String::new(),
-                    });
-                }
                 _ => {
                     let uploaded = client.upload_file(file_path).await?;
                     let file_name = Path::new(file_path)
@@ -648,7 +684,7 @@ impl TelegramManager {
                 date: sent.date().as_second(),
                 is_outgoing: true,
                 is_read: false,
-                reply_to_id: None,
+                reply_to_id,
                 is_deleted: false,
                 original_text: None,
                 media_type: Some(media_type.to_string()),
@@ -675,7 +711,7 @@ impl TelegramManager {
                     .as_secs() as i64,
                 is_outgoing: true,
                 is_read: false,
-                reply_to_id: None,
+                reply_to_id,
                 is_deleted: false,
                 original_text: None,
                 media_type: Some(media_type.to_string()),
@@ -706,8 +742,9 @@ impl TelegramManager {
 
         let client_lock = self.client.lock().await;
         let cache = self.peer_cache.lock().await;
+        let peer_ref = self.resolve_peer_ref(&cache, chat_id).await;
 
-        if let (Some(client), Some(&peer_ref)) = (client_lock.as_ref(), cache.get(&chat_id)) {
+        if let (Some(client), Some(peer_ref)) = (client_lock.as_ref(), peer_ref) {
             let messages = client.get_messages_by_id(peer_ref, &[message_id]).await?;
             if let Some(Some(msg)) = messages.into_iter().next() {
                 if let Some(media) = msg.media() {
@@ -746,8 +783,9 @@ impl TelegramManager {
 
         let client_lock = self.client.lock().await;
         let cache = self.peer_cache.lock().await;
+        let peer_ref = self.resolve_peer_ref(&cache, chat_id).await;
 
-        if let (Some(client), Some(&peer_ref)) = (client_lock.as_ref(), cache.get(&chat_id)) {
+        if let (Some(client), Some(peer_ref)) = (client_lock.as_ref(), peer_ref) {
             let peer = client.resolve_peer(peer_ref).await?;
             if let Some(photo) = peer.photo(false).await? {
                 if let Some(parent) = Path::new(target_path).parent() {
@@ -795,8 +833,9 @@ impl TelegramManager {
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let client_lock = self.client.lock().await;
         let cache = self.peer_cache.lock().await;
+        let peer_ref = self.resolve_peer_ref(&cache, chat_id).await;
 
-        if let (Some(client), Some(&peer_ref)) = (client_lock.as_ref(), cache.get(&chat_id)) {
+        if let (Some(client), Some(peer_ref)) = (client_lock.as_ref(), peer_ref) {
             if let Some(em) = emoji {
                 client.send_reactions(peer_ref, message_id, em).await?;
             } else {
@@ -823,8 +862,9 @@ impl TelegramManager {
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let client_lock = self.client.lock().await;
         let cache = self.peer_cache.lock().await;
+        let peer_ref = self.resolve_peer_ref(&cache, chat_id).await;
 
-        if let (Some(client), Some(&peer_ref)) = (client_lock.as_ref(), cache.get(&chat_id)) {
+        if let (Some(client), Some(peer_ref)) = (client_lock.as_ref(), peer_ref) {
             if unpin {
                 client.unpin_message(peer_ref, message_id).await?;
             } else {
@@ -835,4 +875,236 @@ impl TelegramManager {
             Err("Не знайдено дескриптор чату для закріплення".into())
         }
     }
+
+    /// Forwards real messages between chats via MTProto forward_messages
+    pub async fn forward_messages(
+        &self,
+        db: &LocalDatabase,
+        from_chat_id: i64,
+        to_chat_id: i64,
+        message_ids: Vec<i32>,
+    ) -> Result<Vec<MessageItem>, Box<dyn std::error::Error + Send + Sync>> {
+        let client_lock = self.client.lock().await;
+        let cache = self.peer_cache.lock().await;
+        let from_peer = self.resolve_peer_ref(&cache, from_chat_id).await;
+        let to_peer = self.resolve_peer_ref(&cache, to_chat_id).await;
+
+        if let (Some(client), Some(from_peer), Some(to_peer)) = (client_lock.as_ref(), from_peer, to_peer) {
+            let sent_messages = client.forward_messages(to_peer, &message_ids, from_peer).await?;
+            let mut result = Vec::new();
+            for maybe_msg in sent_messages {
+                if let Some(msg) = maybe_msg {
+                    let item = MessageItem {
+                        id: msg.id(),
+                        chat_id: to_chat_id,
+                        sender_id: 0,
+                        sender_name: "Я".into(),
+                        text: msg.text().to_string(),
+                        date: msg.date().as_second(),
+                        is_outgoing: true,
+                        is_read: false,
+                        reply_to_id: msg.reply_to_message_id(),
+                        is_deleted: false,
+                        original_text: None,
+                        media_type: None,
+                        media_path: None,
+                        duration: None,
+                    };
+                    let _ = db.save_message(&item);
+                    result.push(item);
+                }
+            }
+            Ok(result)
+        } else {
+            Err("Не знайдено дескриптор чату для пересилання".into())
+        }
+    }
+
+    /// Fetches installed stickersets and caches WebP stickers locally
+    pub async fn get_installed_stickers(
+        &self,
+        cache_dir: &str,
+    ) -> Result<Vec<StickerModel>, Box<dyn std::error::Error + Send + Sync>> {
+        let client_lock = self.client.lock().await;
+        if let Some(client) = client_lock.as_ref() {
+            let all_stickers = client
+                .invoke(&tl::functions::messages::GetAllStickers { hash: 0 })
+                .await?;
+            let sets = match all_stickers {
+                tl::enums::messages::AllStickers::Stickers(s) => s.sets,
+                tl::enums::messages::AllStickers::NotModified => Vec::new(),
+            };
+
+            let mut sticker_models = Vec::new();
+            // Take top 5 installed sticker packs
+            for set in sets.into_iter().take(5) {
+                let (id, access_hash) = match set {
+                    tl::enums::StickerSet::Set(s) => (s.id, s.access_hash),
+                };
+
+                let res = client
+                    .invoke(&tl::functions::messages::GetStickerSet {
+                        stickerset: tl::enums::InputStickerSet::Id(tl::types::InputStickerSetId {
+                            id,
+                            access_hash,
+                        }),
+                        hash: 0,
+                    })
+                    .await;
+
+                if let Ok(tl::enums::messages::StickerSet::Set(stickerset_data)) = res {
+                    for doc_enum in stickerset_data.documents {
+                        if let tl::enums::Document::Document(doc) = doc_enum {
+                            let mut emoji = String::from("⭐");
+                            let mut width = 512;
+                            let mut height = 512;
+
+                            for attr in &doc.attributes {
+                                match attr {
+                                    tl::enums::DocumentAttribute::Sticker(st) => {
+                                        if !st.alt.is_empty() {
+                                            emoji = st.alt.clone();
+                                        }
+                                    }
+                                    tl::enums::DocumentAttribute::ImageSize(sz) => {
+                                        width = sz.w;
+                                        height = sz.h;
+                                    }
+                                    _ => {}
+                                }
+                            }
+
+                            let hex_ref = bytes_to_hex(&doc.file_reference);
+                            let doc_id = doc.id;
+                            let doc_access_hash = doc.access_hash;
+                            let mime = doc.mime_type.clone();
+
+                            let sticker_path = format!("{}/stickers/{}.webp", cache_dir, doc_id);
+                            let target_file = Path::new(&sticker_path);
+
+                            let mut thumb_path: Option<String> = None;
+                            if target_file.exists()
+                                && std::fs::metadata(target_file)
+                                    .map(|m| m.len() > 0)
+                                    .unwrap_or(false)
+                            {
+                                thumb_path = Some(sticker_path);
+                            } else if mime == "image/webp" {
+                                if let Some(parent) = target_file.parent() {
+                                    let _ = tokio::fs::create_dir_all(parent).await;
+                                }
+                                let doc_media = grammers_client::media::Document {
+                                    raw: tl::types::MessageMediaDocument {
+                                        nopremium: false,
+                                        spoiler: false,
+                                        video: false,
+                                        round: false,
+                                        voice: false,
+                                        document: Some(tl::enums::Document::Document(doc)),
+                                        alt_documents: None,
+                                        ttl_seconds: None,
+                                        video_cover: None,
+                                        video_timestamp: None,
+                                    },
+                                };
+                                if client.download_media(&doc_media, &sticker_path).await.is_ok() {
+                                    thumb_path = Some(sticker_path);
+                                }
+                            }
+
+                            sticker_models.push(StickerModel {
+                                document_id: doc_id,
+                                access_hash: doc_access_hash,
+                                file_reference_hex: hex_ref,
+                                emoji,
+                                mime_type: mime,
+                                width,
+                                height,
+                                thumb_path,
+                            });
+                        }
+                    }
+                }
+            }
+            Ok(sticker_models)
+        } else {
+            Err("Клієнт не підключений до серверів Telegram".into())
+        }
+    }
+
+    /// Sends a Telegram sticker document natively via MTProto
+    pub async fn send_sticker(
+        &self,
+        db: &LocalDatabase,
+        chat_id: i64,
+        doc_id: i64,
+        access_hash: i64,
+        file_ref: &[u8],
+        reply_to_id: Option<i32>,
+    ) -> Result<MessageItem, Box<dyn std::error::Error + Send + Sync>> {
+        let client_lock = self.client.lock().await;
+        let cache = self.peer_cache.lock().await;
+        let peer_ref = self.resolve_peer_ref(&cache, chat_id).await;
+
+        if let (Some(client), Some(peer_ref)) = (client_lock.as_ref(), peer_ref) {
+            let input_doc = tl::types::InputDocument {
+                id: doc_id,
+                access_hash,
+                file_reference: file_ref.to_vec(),
+            };
+
+            let media_doc = tl::types::InputMediaDocument {
+                spoiler: false,
+                id: tl::enums::InputDocument::Document(input_doc),
+                video_cover: None,
+                video_timestamp: None,
+                ttl_seconds: None,
+                query: None,
+            };
+
+            let mut input_msg = InputMessage::new().media(media_doc);
+            if reply_to_id.is_some() {
+                input_msg = input_msg.reply_to(reply_to_id);
+            }
+
+            let sent = client.send_message(peer_ref, input_msg).await?;
+            let item = MessageItem {
+                id: sent.id(),
+                chat_id,
+                sender_id: 0,
+                sender_name: "Я".into(),
+                text: sent.text().to_string(),
+                date: sent.date().as_second(),
+                is_outgoing: true,
+                is_read: false,
+                reply_to_id,
+                is_deleted: false,
+                original_text: None,
+                media_type: Some("sticker".to_string()),
+                media_path: None,
+                duration: None,
+            };
+            let _ = db.save_message(&item);
+            Ok(item)
+        } else {
+            Err("Не знайдено дескриптор чату для відправки стікера".into())
+        }
+    }
+}
+
+pub fn bytes_to_hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{:02x}", b)).collect()
+}
+
+pub fn hex_to_bytes(hex: &str) -> Vec<u8> {
+    (0..hex.len())
+        .step_by(2)
+        .filter_map(|i| {
+            if i + 2 <= hex.len() {
+                u8::from_str_radix(&hex[i..i + 2], 16).ok()
+            } else {
+                None
+            }
+        })
+        .collect()
 }

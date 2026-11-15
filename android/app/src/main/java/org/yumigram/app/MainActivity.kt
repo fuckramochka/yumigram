@@ -23,18 +23,18 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.yumigram.app.bridge.ChatModel
 import org.yumigram.app.bridge.MessageModel
+import org.yumigram.app.bridge.UserModel
 import org.yumigram.app.bridge.YumigramBridge
 import org.yumigram.app.ui.navigation.Screen
-import org.yumigram.app.ui.screens.agent.AgentScreen
 import org.yumigram.app.ui.screens.auth.AuthScreen
 import org.yumigram.app.ui.screens.chat.ChatScreen
 import org.yumigram.app.ui.screens.chats.ChatListScreen
 import org.yumigram.app.ui.screens.contacts.ContactsScreen
-import org.yumigram.app.ui.screens.plugins.PluginsScreen
-import org.yumigram.app.ui.screens.profile.ProfileScreen
 import org.yumigram.app.ui.screens.settings.IndicatorStyle
 import org.yumigram.app.ui.screens.settings.SettingsScreen
 import org.yumigram.app.ui.theme.YumigramTheme
@@ -183,7 +183,7 @@ fun MainAppContainer(
     var chats by remember { mutableStateOf<List<ChatModel>>(emptyList()) }
     var messages by remember { mutableStateOf<List<MessageModel>>(emptyList()) }
     var isRefreshing by remember { mutableStateOf(false) }
-    var isViewingPlugins by remember { mutableStateOf(false) }
+    var currentUser by remember { mutableStateOf<UserModel?>(null) }
 
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -212,7 +212,111 @@ fun MainAppContainer(
     }
 
     LaunchedEffect(Unit) {
+        scope.launch {
+            try {
+                currentUser = YumigramBridge.getMe()
+            } catch (e: Throwable) {
+                android.util.Log.e("Yumigram", "getMe error", e)
+            }
+        }
         refreshChats()
+    }
+
+    // Real-time event polling loop from Rust UpdatesEngine
+    LaunchedEffect(Unit) {
+        while (isActive) {
+            delay(400)
+            try {
+                val events = YumigramBridge.pollEvents()
+                if (events.isNotEmpty()) {
+                    for (event in events) {
+                        when (event.type) {
+                            "new_message" -> {
+                                val newMsg = event.message
+                                if (newMsg != null) {
+                                    if (selectedChat?.id == event.chat_id) {
+                                        if (messages.none { it.id == newMsg.id }) {
+                                            messages = listOf(newMsg) + messages
+                                        }
+                                    }
+                                    var chatFound = false
+                                    chats = chats.map { chat ->
+                                        if (chat.id == event.chat_id) {
+                                            chatFound = true
+                                            val isCurrentChatOpen = (selectedChat?.id == event.chat_id)
+                                            val newUnread = if (isCurrentChatOpen || newMsg.is_outgoing) {
+                                                chat.unread_count
+                                            } else {
+                                                chat.unread_count + 1
+                                            }
+                                            chat.copy(
+                                                last_message_text = newMsg.text.ifBlank {
+                                                    when (newMsg.media_type) {
+                                                        "photo" -> "📷 Фотографія"
+                                                        "voice" -> "🎤 Голосове повідомлення"
+                                                        "video_note", "round_video" -> "📹 Відеоповідомлення"
+                                                        "video" -> "🎥 Відео"
+                                                        "audio", "music" -> "🎵 Музика"
+                                                        "file" -> "📁 Файл"
+                                                        else -> newMsg.text
+                                                    }
+                                                },
+                                                last_message_date = newMsg.date,
+                                                last_message_outgoing = newMsg.is_outgoing,
+                                                unread_count = newUnread
+                                            )
+                                        } else {
+                                            chat
+                                        }
+                                    }
+                                    if (!chatFound) {
+                                        refreshChats()
+                                    }
+                                }
+                            }
+                            "delete_message" -> {
+                                val targetId = event.message_id ?: event.msg_id ?: event.message?.id
+                                if (targetId != null) {
+                                    if (selectedChat?.id == event.chat_id || event.chat_id == 0L) {
+                                        messages = messages.map { msg ->
+                                            if (msg.id == targetId) {
+                                                msg.copy(is_deleted = true)
+                                            } else {
+                                                msg
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            "edit_message" -> {
+                                val targetId = event.message_id ?: event.msg_id ?: event.message?.id
+                                val newText = event.text ?: event.message?.text
+                                if (targetId != null && newText != null) {
+                                    if (selectedChat?.id == event.chat_id || event.chat_id == 0L) {
+                                        messages = messages.map { msg ->
+                                            if (msg.id == targetId) {
+                                                msg.copy(text = newText)
+                                            } else {
+                                                msg
+                                            }
+                                        }
+                                    }
+                                    chats = chats.map { chat ->
+                                        if (chat.id == event.chat_id) {
+                                            chat.copy(last_message_text = newText)
+                                        } else {
+                                            chat
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (e: Throwable) {
+                android.util.Log.e("MainActivity", "pollEvents error", e)
+            }
+        }
     }
 
     // When chat is selected, load messages
@@ -234,92 +338,7 @@ fun MainAppContainer(
         }
     }
 
-    if (isViewingPlugins) {
-        PluginsScreen(
-            onBack = { isViewingPlugins = false }
-        )
-    } else if (selectedChat != null) {
-        ChatScreen(
-            chat = selectedChat!!,
-            messages = messages,
-            indicatorStyle = indicatorStyle,
-            onBack = {
-                selectedChat = null
-                refreshChats()
-            },
-            onSendMessage = { text ->
-                scope.launch {
-                    val sentMsg = YumigramBridge.sendMessage(selectedChat!!.id, text)
-                    if (sentMsg != null) {
-                        messages = listOf(sentMsg) + messages
-                    }
-                }
-            },
-            onSendRichMessage = { text, mediaType, mediaPath, duration ->
-                val localId = (System.currentTimeMillis() % 1000000).toInt()
-                val richMsg = MessageModel(
-                    id = localId,
-                    chat_id = selectedChat!!.id,
-                    sender_id = 0,
-                    sender_name = "Я",
-                    text = text,
-                    date = System.currentTimeMillis() / 1000,
-                    is_outgoing = true,
-                    is_read = false,
-                    media_type = mediaType,
-                    media_path = mediaPath,
-                    duration = duration
-                )
-                messages = listOf(richMsg) + messages
-                scope.launch {
-                    try {
-                        val currentChatId = selectedChat?.id ?: return@launch
-                        val realPath = if (mediaPath != null && mediaPath.startsWith("content://")) {
-                            resolveContentUriToCacheFile(context, Uri.parse(mediaPath), mediaType)
-                        } else {
-                            mediaPath ?: ""
-                        }
-
-                        val sentMsg = if (mediaType != null && realPath.isNotBlank()) {
-                            val cleanType = when (mediaType) {
-                                "round_video" -> "video_note"
-                                else -> mediaType
-                            }
-                            val captionText = when (mediaType) {
-                                "photo", "video", "file", "audio" -> {
-                                    if (text.startsWith("🖼️") || text.startsWith("🎥") || text.startsWith("📁")) "" else text
-                                }
-                                else -> ""
-                            }
-                            YumigramBridge.sendMedia(
-                                chatId = currentChatId,
-                                filePath = realPath,
-                                mediaType = cleanType,
-                                caption = captionText,
-                                duration = duration ?: 0
-                            )
-                        } else if (mediaType == "location" || mediaType == "contact") {
-                            YumigramBridge.sendMedia(
-                                chatId = currentChatId,
-                                filePath = realPath.ifBlank { text },
-                                mediaType = mediaType,
-                                caption = text,
-                                duration = 0
-                            )
-                        } else {
-                            YumigramBridge.sendMessage(currentChatId, text)
-                        }
-
-                        if (sentMsg != null) {
-                            messages = messages.map { if (it.id == localId) sentMsg else it }
-                        }
-                    } catch (e: Throwable) {
-                        android.util.Log.e("MainActivity", "Failed to send real media", e)
-                    }
-                }
-            }
-        )
-    } else {
+    Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             bottomBar = {
                 NavigationBar(
@@ -328,8 +347,6 @@ fun MainAppContainer(
                     val navItems = listOf(
                         Screen.Chats,
                         Screen.Contacts,
-                        Screen.Agent,
-                        Screen.Profile,
                         Screen.Settings
                     )
                     navItems.forEach { screen ->
@@ -355,6 +372,7 @@ fun MainAppContainer(
                             chats = chats,
                             indicatorStyle = indicatorStyle,
                             isRefreshing = isRefreshing,
+                            currentUserId = currentUser?.id,
                             onRefresh = { refreshChats() },
                             onChatClick = { chat -> selectedChat = chat }
                         )
@@ -362,19 +380,104 @@ fun MainAppContainer(
                             contacts = chats,
                             onContactClick = { chat -> selectedChat = chat }
                         )
-                        Screen.Agent -> AgentScreen()
-                        Screen.Profile -> ProfileScreen(
-                            onNavigateToSettings = { currentScreen = Screen.Settings }
-                        )
                         Screen.Settings -> SettingsScreen(
                             currentIndicator = indicatorStyle,
                             onIndicatorChanged = { indicatorStyle = it },
-                            onOpenPlugins = { isViewingPlugins = true },
                             onLogout = onLogout
                         )
                     }
                 }
             }
+        }
+
+        if (selectedChat != null) {
+            ChatScreen(
+                chat = selectedChat!!,
+                messages = messages,
+                indicatorStyle = indicatorStyle,
+                onBack = {
+                    selectedChat = null
+                    refreshChats()
+                },
+                onSendMessage = { text, replyToId ->
+                    scope.launch {
+                        val sentMsg = YumigramBridge.sendMessage(selectedChat!!.id, text, replyToId)
+                        if (sentMsg != null) {
+                            messages = listOf(sentMsg) + messages
+                        }
+                    }
+                },
+                onSendRichMessage = { text, mediaType, mediaPath, duration, replyToId ->
+                    val localId = (System.currentTimeMillis() % 1000000).toInt()
+                    val richMsg = MessageModel(
+                        id = localId,
+                        chat_id = selectedChat!!.id,
+                        sender_id = 0,
+                        sender_name = "Я",
+                        text = text,
+                        date = System.currentTimeMillis() / 1000,
+                        is_outgoing = true,
+                        is_read = false,
+                        reply_to_id = replyToId,
+                        media_type = mediaType,
+                        media_path = mediaPath,
+                        duration = duration
+                    )
+                    messages = listOf(richMsg) + messages
+                    scope.launch {
+                        try {
+                            val currentChatId = selectedChat?.id ?: return@launch
+                            val realPath = if (mediaPath != null && mediaPath.startsWith("content://")) {
+                                resolveContentUriToCacheFile(context, Uri.parse(mediaPath), mediaType)
+                            } else {
+                                mediaPath ?: ""
+                            }
+
+                            val sentMsg = if (mediaType != null && realPath.isNotBlank()) {
+                                val cleanType = when (mediaType) {
+                                    "round_video" -> "video_note"
+                                    else -> mediaType
+                                }
+                                val captionText = when (mediaType) {
+                                    "photo", "video", "file", "audio" -> {
+                                        if (text.startsWith("🖼️") || text.startsWith("🎥") || text.startsWith("📁")) "" else text
+                                    }
+                                    else -> ""
+                                }
+                                YumigramBridge.sendMedia(
+                                    chatId = currentChatId,
+                                    filePath = realPath,
+                                    mediaType = cleanType,
+                                    caption = captionText,
+                                    duration = duration ?: 0,
+                                    replyToId = replyToId
+                                )
+                            } else {
+                                YumigramBridge.sendMessage(currentChatId, text, replyToId)
+                            }
+
+                            if (sentMsg != null) {
+                                messages = messages.map { if (it.id == localId) sentMsg else it }
+                            }
+                        } catch (e: Throwable) {
+                            android.util.Log.e("MainActivity", "Failed to send real media", e)
+                        }
+                    }
+                },
+                onSendSticker = { sticker, replyToId ->
+                    scope.launch {
+                        try {
+                            val currentChatId = selectedChat?.id ?: return@launch
+                            val sentMsg = YumigramBridge.sendSticker(currentChatId, sticker, replyToId)
+                            if (sentMsg != null) {
+                                messages = listOf(sentMsg) + messages
+                            }
+                        } catch (e: Throwable) {
+                            android.util.Log.e("MainActivity", "Failed to send real sticker", e)
+                        }
+                    }
+                }
+            )
         }
     }
 }

@@ -216,6 +216,17 @@ impl LocalDatabase {
         Ok(())
     }
 
+    pub fn get_message_chat_id(&self, message_id: i32) -> Result<Option<i64>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare("SELECT chat_id FROM messages WHERE id = ?1 LIMIT 1")?;
+        let mut rows = stmt.query(params![message_id])?;
+        if let Some(row) = rows.next()? {
+            Ok(Some(row.get(0)?))
+        } else {
+            Ok(None)
+        }
+    }
+
     /// Anti-Edit feature: stores the original text if it was modified
     pub fn mark_message_edited(&self, chat_id: i64, message_id: i32, new_text: &str) -> Result<()> {
         let conn = self.conn.lock().unwrap();

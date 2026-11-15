@@ -30,6 +30,7 @@ fun VoiceMessageBubble(
     mediaPath: String?,
     durationSeconds: Int?,
     isOutgoing: Boolean,
+    label: String = "Голосове повідомлення",
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -164,7 +165,7 @@ fun VoiceMessageBubble(
                     )
 
                     Text(
-                        text = "Голосове повідомлення",
+                        text = label,
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
