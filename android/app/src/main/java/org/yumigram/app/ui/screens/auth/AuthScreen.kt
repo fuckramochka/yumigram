@@ -20,16 +20,20 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.yumigram.app.bridge.YumigramBridge
 
@@ -61,63 +65,78 @@ enum class ApiProfile(val label: String, val description: String, val apiId: Int
 }
 
 /**
- * Formats a phone number with clean spacing after the country code and between digit groups.
- * e.g. "380681940505" -> "+380 68 194 05 05"
+ * VisualTransformation for phone numbers that displays visual spaces
+ * (e.g. "+380 68 194 05 05") WITHOUT modifying the raw text in state.
+ * This guarantees the cursor never jumps backwards and numbers never get inverted!
  */
-fun formatPhoneNumber(digits: String): String {
-    if (digits.isEmpty()) return "+"
+class PhoneVisualTransformation : VisualTransformation {
+    override fun filter(text: AnnotatedString): TransformedText {
+        val raw = text.text
+        if (raw.isEmpty()) return TransformedText(text, OffsetMapping.Identity)
 
-    // Ukraine (+380): +380 XX XXX XX XX
-    if (digits.startsWith("380")) {
-        val b = StringBuilder("+380")
-        val rest = digits.substring(3)
-        if (rest.isNotEmpty()) {
-            b.append(" ").append(rest.take(2))
-        }
-        if (rest.length > 2) {
-            b.append(" ").append(rest.substring(2).take(3))
-        }
-        if (rest.length > 5) {
-            b.append(" ").append(rest.substring(5).take(2))
-        }
-        if (rest.length > 7) {
-            b.append(" ").append(rest.substring(7).take(2))
-        }
-        return b.toString()
-    }
+        val out = StringBuilder()
+        val originalToTransformed = IntArray(raw.length + 1)
+        val transformedToOriginal = ArrayList<Int>()
 
-    // USA/Canada (+1): +1 XXX XXX XXXX
-    if (digits.startsWith("1")) {
-        val b = StringBuilder("+1")
-        val rest = digits.substring(1)
-        if (rest.isNotEmpty()) b.append(" ").append(rest.take(3))
-        if (rest.length > 3) b.append(" ").append(rest.substring(3).take(3))
-        if (rest.length > 6) b.append(" ").append(rest.substring(6).take(4))
-        return b.toString()
-    }
+        var visualPos = 0
 
-    // Common 2-digit country codes: +XX XXX XXX XXX
-    val twoDigitPrefixes = setOf("44", "48", "49", "33", "34", "39", "40", "41", "43", "45", "46", "47", "90", "91")
-    if (digits.length >= 2 && twoDigitPrefixes.contains(digits.take(2))) {
-        val b = StringBuilder("+" + digits.take(2))
-        val rest = digits.substring(2)
-        if (rest.isNotEmpty()) b.append(" ").append(rest.take(3))
-        if (rest.length > 3) b.append(" ").append(rest.substring(3).take(3))
-        if (rest.length > 6) b.append(" ").append(rest.substring(6).take(3))
-        return b.toString()
-    }
+        fun appendChar(c: Char, rawIdx: Int) {
+            originalToTransformed[rawIdx] = visualPos
+            out.append(c)
+            transformedToOriginal.add(rawIdx)
+            visualPos++
+        }
 
-    // Generic fallback: +XXX followed by groups of 3
-    val prefixLen = if (digits.length >= 3) 3 else digits.length
-    val b = StringBuilder("+" + digits.take(prefixLen))
-    val rest = digits.substring(prefixLen)
-    var i = 0
-    while (i < rest.length) {
-        b.append(" ")
-        b.append(rest.substring(i, minOf(i + 3, rest.length)))
-        i += 3
+        fun appendSpace() {
+            out.append(' ')
+            val currentRaw = minOf(transformedToOriginal.size, raw.length)
+            transformedToOriginal.add(currentRaw)
+            visualPos++
+        }
+
+        if (raw.startsWith("+380") || raw.startsWith("380")) {
+            val hasPlus = raw.startsWith("+")
+            val codeLen = if (hasPlus) 4 else 3
+
+            for (i in 0 until raw.length) {
+                if (i == codeLen && i > 0) appendSpace()
+                else if (i == codeLen + 2) appendSpace()
+                else if (i == codeLen + 5) appendSpace()
+                else if (i == codeLen + 7) appendSpace()
+
+                appendChar(raw[i], i)
+            }
+            if (raw.length == codeLen) {
+                appendSpace()
+            }
+        } else {
+            val codeLen = if (raw.startsWith("+")) minOf(4, raw.length) else minOf(3, raw.length)
+            for (i in 0 until raw.length) {
+                if (i == codeLen && i > 0) appendSpace()
+                else if (i > codeLen && (i - codeLen) % 3 == 0) appendSpace()
+
+                appendChar(raw[i], i)
+            }
+            if (raw.length == codeLen && raw.length > 0) {
+                appendSpace()
+            }
+        }
+
+        originalToTransformed[raw.length] = visualPos
+        transformedToOriginal.add(raw.length)
+
+        val offsetMapping = object : OffsetMapping {
+            override fun originalToTransformed(offset: Int): Int {
+                return originalToTransformed[offset.coerceIn(0, raw.length)]
+            }
+
+            override fun transformedToOriginal(offset: Int): Int {
+                return transformedToOriginal[offset.coerceIn(0, transformedToOriginal.size - 1)]
+            }
+        }
+
+        return TransformedText(AnnotatedString(out.toString()), offsetMapping)
     }
-    return b.toString()
 }
 
 @SuppressLint("SetJavaScriptEnabled")
@@ -222,7 +241,8 @@ fun AuthScreen(
     modifier: Modifier = Modifier
 ) {
     var step by remember { mutableStateOf(AuthStep.PHONE) }
-    var phoneNumber by remember { mutableStateOf("+380 ") }
+    // Raw phone number stored in state without formatting spaces
+    var phoneNumber by remember { mutableStateOf("+380") }
     var code by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var isPasswordVisible by remember { mutableStateOf(false) }
@@ -237,8 +257,21 @@ fun AuthScreen(
     var recaptchaSitekey by remember { mutableStateOf<String?>(null) }
     var showRecaptchaDialog by remember { mutableStateOf(false) }
 
+    var resendCooldown by remember { mutableStateOf(60) }
+
     val scope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
+
+    // Countdown timer for code resend
+    LaunchedEffect(step) {
+        if (step == AuthStep.CODE) {
+            resendCooldown = 60
+            while (resendCooldown > 0) {
+                delay(1000)
+                resendCooldown--
+            }
+        }
+    }
 
     // Recaptcha Dialog
     if (showRecaptchaDialog && recaptchaSitekey != null) {
@@ -247,7 +280,6 @@ fun AuthScreen(
             onSuccess = { _ ->
                 showRecaptchaDialog = false
                 errorMessage = null
-                // With token verified, re-trigger request code
                 val rawDigits = phoneNumber.filter { it.isDigit() }
                 if (rawDigits.length >= 7) {
                     isLoading = true
@@ -411,20 +443,19 @@ fun AuthScreen(
                             OutlinedTextField(
                                 value = phoneNumber,
                                 onValueChange = { input ->
-                                    var raw = input
-                                    if (input.length < phoneNumber.length && phoneNumber.endsWith(" ")) {
-                                        val clean = phoneNumber.filter { it.isDigit() }
-                                        raw = if (clean.isNotEmpty()) clean.dropLast(1) else ""
-                                    }
-                                    val cleanDigits = raw.filter { it.isDigit() }
-                                    phoneNumber = if (cleanDigits.isEmpty()) {
-                                        if (raw.startsWith("+")) "+" else ""
+                                    // Accept only leading '+' and digits, prevent multiple '+'
+                                    val clean = if (input.startsWith("+")) {
+                                        "+" + input.substring(1).filter { it.isDigit() }
                                     } else {
-                                        formatPhoneNumber(cleanDigits)
+                                        input.filter { it.isDigit() }
                                     }
-                                    errorMessage = null
-                                    recaptchaSitekey = null
+                                    if (clean.filter { it.isDigit() }.length <= 15) {
+                                        phoneNumber = clean
+                                        errorMessage = null
+                                        recaptchaSitekey = null
+                                    }
                                 },
+                                visualTransformation = remember { PhoneVisualTransformation() },
                                 label = { Text("Номер телефону") },
                                 placeholder = { Text("+380 68 194 05 05") },
                                 singleLine = true,
@@ -498,6 +529,43 @@ fun AuthScreen(
                         }
 
                         AuthStep.CODE -> {
+                            // Show verified recipient phone number
+                            Surface(
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 12.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Phone,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Код надіслано на: $phoneNumber",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                }
+                            }
+
+                            Text(
+                                text = "💬 Перевірте офіційний додаток Telegram на іншому телефоні чи ПК — код приходить у системний чат 'Telegram' (із синьою галочкою)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(bottom = 16.dp)
+                            )
+
                             OutlinedTextField(
                                 value = code,
                                 onValueChange = {
@@ -570,7 +638,38 @@ fun AuthScreen(
                                 }
                             }
 
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // Resend Code / SMS Countdown Button
+                            FilledTonalButton(
+                                onClick = {
+                                    if (resendCooldown == 0 && !isLoading) {
+                                        isLoading = true
+                                        scope.launch {
+                                            val rawDigits = phoneNumber.filter { it.isDigit() }
+                                            val res = YumigramBridge.requestCode("+$rawDigits")
+                                            isLoading = false
+                                            if (res.success) {
+                                                errorMessage = null
+                                                resendCooldown = 60
+                                            } else {
+                                                errorMessage = res.message ?: "Помилка повторного запиту коду"
+                                            }
+                                        }
+                                    }
+                                },
+                                enabled = resendCooldown == 0 && !isLoading,
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                if (resendCooldown > 0) {
+                                    Text("Повторний запит через ${resendCooldown}с", fontSize = 13.sp)
+                                } else {
+                                    Text("📩 Надіслати код повторно (SMS / Telegram)", fontSize = 13.sp)
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(6.dp))
 
                             TextButton(
                                 onClick = {
@@ -580,7 +679,7 @@ fun AuthScreen(
                                     recaptchaSitekey = null
                                 }
                             ) {
-                                Text("Змінити номер")
+                                Text("Змінити номер телефону")
                             }
                         }
 
