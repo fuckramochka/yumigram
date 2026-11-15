@@ -186,6 +186,7 @@ fun MainAppContainer(
     var isViewingPlugins by remember { mutableStateOf(false) }
 
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     // Load cached chats from local SQLite and fetch live from Telegram
     fun refreshChats() {
