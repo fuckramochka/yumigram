@@ -327,7 +327,15 @@ fun ChatScreen(
                                     )
                                 }
                                 IconButton(
-                                    onClick = { pinnedMessage = null },
+                                    onClick = {
+                                        val toUnpin = pinnedMessage
+                                        pinnedMessage = null
+                                        if (toUnpin != null) {
+                                            scope.launch {
+                                                YumigramBridge.pinMessage(chat.id, toUnpin.id, unpin = true)
+                                            }
+                                        }
+                                    },
                                     modifier = Modifier.size(28.dp)
                                 ) {
                                     Icon(
@@ -688,10 +696,15 @@ fun ChatScreen(
                         wallpaper = currentWallpaper,
                         onSwipeReply = { replyingTo = msg },
                         onMediaClick = { viewingMediaMessage = it },
-                        onPinMessage = { pinnedMessage = msg },
+                        onPinMessage = {
+                            pinnedMessage = msg
+                            scope.launch {
+                                YumigramBridge.pinMessage(chat.id, msg.id, unpin = false)
+                            }
+                        },
                         onAddReaction = { reaction ->
                             scope.launch {
-                                YumigramBridge.sendMessage(chat.id, "$reaction на повідомлення #${msg.id}")
+                                YumigramBridge.sendReaction(chat.id, msg.id, reaction)
                             }
                         }
                     )

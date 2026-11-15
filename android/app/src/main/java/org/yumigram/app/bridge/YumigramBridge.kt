@@ -148,6 +148,8 @@ object YumigramBridge {
     external fun nativeFetchLiveMessages(chatId: Long, limit: Int): String
     external fun nativeSendMessage(chatId: Long, text: String): String
     external fun nativeSendMedia(chatId: Long, filePath: String, mediaType: String, caption: String, duration: Int): String
+    external fun nativeSendReaction(chatId: Long, messageId: Int, emoji: String): Boolean
+    external fun nativePinMessage(chatId: Long, messageId: Int, unpin: Boolean): Boolean
     external fun nativeGetChats(): String
     external fun nativeGetMessages(chatId: Long, limit: Int, offset: Int): String
     external fun nativeSaveChat(chatJson: String): Boolean
@@ -258,6 +260,26 @@ object YumigramBridge {
         } catch (e: Exception) {
             android.util.Log.e("YumigramBridge", "sendMedia error", e)
             null
+        }
+    }
+
+    suspend fun sendReaction(chatId: Long, messageId: Int, emoji: String?): Boolean = withContext(Dispatchers.IO) {
+        if (!isLoaded) return@withContext false
+        try {
+            nativeSendReaction(chatId, messageId, emoji ?: "")
+        } catch (e: Exception) {
+            android.util.Log.e("YumigramBridge", "sendReaction error", e)
+            false
+        }
+    }
+
+    suspend fun pinMessage(chatId: Long, messageId: Int, unpin: Boolean = false): Boolean = withContext(Dispatchers.IO) {
+        if (!isLoaded) return@withContext false
+        try {
+            nativePinMessage(chatId, messageId, unpin)
+        } catch (e: Exception) {
+            android.util.Log.e("YumigramBridge", "pinMessage error", e)
+            false
         }
     }
 

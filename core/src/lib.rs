@@ -391,6 +391,68 @@ pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeSendMed
 }
 
 #[unsafe(no_mangle)]
+pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeSendReaction(
+    mut env: JNIEnv,
+    _class: JClass,
+    chat_id: jlong,
+    message_id: jint,
+    emoji: JString,
+) -> jboolean {
+    let raw_emoji: Option<String> = match env.get_string(&emoji) {
+        Ok(s) => {
+            let string: String = s.into();
+            if string.is_empty() {
+                None
+            } else {
+                Some(string)
+            }
+        }
+        Err(_) => None,
+    };
+
+    let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        if let Some(state) = get_state() {
+            let tg = state.tg.clone();
+            match state
+                .rt
+                .block_on(tg.send_reaction(chat_id, message_id, raw_emoji.as_deref()))
+            {
+                Ok(_) => 1,
+                Err(_) => 0,
+            }
+        } else {
+            0
+        }
+    }));
+
+    res.unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativePinMessage(
+    _env: JNIEnv,
+    _class: JClass,
+    chat_id: jlong,
+    message_id: jint,
+    unpin: jboolean,
+) -> jboolean {
+    let is_unpin = unpin != 0;
+    let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        if let Some(state) = get_state() {
+            let tg = state.tg.clone();
+            match state.rt.block_on(tg.pin_message(chat_id, message_id, is_unpin)) {
+                Ok(_) => 1,
+                Err(_) => 0,
+            }
+        } else {
+            0
+        }
+    }));
+
+    res.unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeGetChats(
     mut env: JNIEnv,
     _class: JClass,

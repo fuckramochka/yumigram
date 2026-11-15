@@ -14,7 +14,9 @@ class AudioRecorderManager(private val context: Context) {
     fun startRecording(): Boolean {
         try {
             val audioDir = File(context.cacheDir, "audio_notes").apply { if (!exists()) mkdirs() }
-            val file = File(audioDir, "voice_${System.currentTimeMillis()}.m4a")
+            val isOggOpusSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+            val ext = if (isOggOpusSupported) "ogg" else "m4a"
+            val file = File(audioDir, "voice_${System.currentTimeMillis()}.$ext")
             currentOutputFile = file
 
             val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -26,10 +28,17 @@ class AudioRecorderManager(private val context: Context) {
 
             recorder.apply {
                 setAudioSource(MediaRecorder.AudioSource.MIC)
-                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-                setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-                setAudioEncodingBitRate(128000)
-                setAudioSamplingRate(44100)
+                if (isOggOpusSupported) {
+                    setOutputFormat(11) // MediaRecorder.OutputFormat.OGG
+                    setAudioEncoder(7)  // MediaRecorder.AudioEncoder.OPUS
+                    setAudioSamplingRate(48000) // Telegram standard Opus 48kHz
+                    setAudioEncodingBitRate(64000) // Telegram standard Opus 64kbps mono
+                } else {
+                    setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                    setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                    setAudioEncodingBitRate(128000)
+                    setAudioSamplingRate(44100)
+                }
                 setOutputFile(file.absolutePath)
                 prepare()
                 start()

@@ -510,26 +510,59 @@ impl TelegramManager {
                 }
                 "voice" => {
                     let uploaded = client.upload_file(file_path).await?;
-                    let dur = if duration > 0 { duration as u64 } else { 1 };
-                    input_msg = input_msg.document(uploaded).attribute(
-                        Attribute::Voice {
-                            duration: std::time::Duration::from_secs(dur),
-                            waveform: None,
-                        },
-                    );
+                    let dur = if duration > 0 { duration } else { 1 };
+                    let raw_doc = tl::types::InputMediaUploadedDocument {
+                        nosound_video: false,
+                        force_file: false,
+                        spoiler: false,
+                        file: uploaded.raw,
+                        thumb: None,
+                        mime_type: "audio/ogg".to_string(),
+                        attributes: vec![
+                            tl::enums::DocumentAttribute::Audio(tl::types::DocumentAttributeAudio {
+                                voice: true,
+                                duration: dur,
+                                title: None,
+                                performer: None,
+                                waveform: None,
+                            })
+                        ],
+                        stickers: None,
+                        ttl_seconds: None,
+                        video_cover: None,
+                        video_timestamp: None,
+                    };
+                    input_msg = input_msg.media(raw_doc);
                 }
                 "video_note" | "round_video" => {
                     let uploaded = client.upload_file(file_path).await?;
-                    let dur = if duration > 0 { duration as u64 } else { 1 };
-                    input_msg = input_msg.document(uploaded).attribute(
-                        Attribute::Video {
-                            round_message: true,
-                            supports_streaming: true,
-                            duration: std::time::Duration::from_secs(dur),
-                            w: 384,
-                            h: 384,
-                        },
-                    );
+                    let dur = if duration > 0 { duration as f64 } else { 1.0 };
+                    let raw_doc = tl::types::InputMediaUploadedDocument {
+                        nosound_video: false,
+                        force_file: false,
+                        spoiler: false,
+                        file: uploaded.raw,
+                        thumb: None,
+                        mime_type: "video/mp4".to_string(),
+                        attributes: vec![
+                            tl::enums::DocumentAttribute::Video(tl::types::DocumentAttributeVideo {
+                                round_message: true,
+                                supports_streaming: true,
+                                nosound: false,
+                                duration: dur,
+                                w: 384,
+                                h: 384,
+                                preload_prefix_size: None,
+                                video_start_ts: None,
+                                video_codec: None,
+                            })
+                        ],
+                        stickers: None,
+                        ttl_seconds: None,
+                        video_cover: None,
+                        video_timestamp: None,
+                    };
+                    input_msg = input_msg.media(raw_doc);
                 }
                 "video" => {
                     let uploaded = client.upload_file(file_path).await?;
@@ -750,6 +783,56 @@ impl TelegramManager {
             Ok(())
         } else {
             Err("Клієнт не підключений до серверів Telegram".into())
+        }
+    }
+
+    /// Sends or removes reactions on a message
+    pub async fn send_reaction(
+        &self,
+        chat_id: i64,
+        message_id: i32,
+        emoji: Option<&str>,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let client_lock = self.client.lock().await;
+        let cache = self.peer_cache.lock().await;
+
+        if let (Some(client), Some(&peer_ref)) = (client_lock.as_ref(), cache.get(&chat_id)) {
+            if let Some(em) = emoji {
+                client.send_reactions(peer_ref, message_id, em).await?;
+            } else {
+                client
+                    .send_reactions(
+                        peer_ref,
+                        message_id,
+                        grammers_client::message::InputReactions::remove(),
+                    )
+                    .await?;
+            }
+            Ok(())
+        } else {
+            Err("Не знайдено дескриптор чату для реакції".into())
+        }
+    }
+
+    /// Pins or unpins a message in the chat
+    pub async fn pin_message(
+        &self,
+        chat_id: i64,
+        message_id: i32,
+        unpin: bool,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let client_lock = self.client.lock().await;
+        let cache = self.peer_cache.lock().await;
+
+        if let (Some(client), Some(&peer_ref)) = (client_lock.as_ref(), cache.get(&chat_id)) {
+            if unpin {
+                client.unpin_message(peer_ref, message_id).await?;
+            } else {
+                client.pin_message(peer_ref, message_id).await?;
+            }
+            Ok(())
+        } else {
+            Err("Не знайдено дескриптор чату для закріплення".into())
         }
     }
 }
