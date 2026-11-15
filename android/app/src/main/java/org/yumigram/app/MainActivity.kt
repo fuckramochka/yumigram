@@ -227,6 +227,35 @@ fun MainAppContainer(
                         messages = listOf(sentMsg) + messages
                     }
                 }
+            },
+            onSendRichMessage = { text, mediaType, mediaPath, duration ->
+                val localId = (System.currentTimeMillis() % 1000000).toInt()
+                val richMsg = MessageModel(
+                    id = localId,
+                    chat_id = selectedChat!!.id,
+                    sender_id = 0,
+                    sender_name = "Я",
+                    text = text,
+                    date = System.currentTimeMillis() / 1000,
+                    is_outgoing = true,
+                    is_read = false,
+                    media_type = mediaType,
+                    media_path = mediaPath,
+                    duration = duration
+                )
+                messages = listOf(richMsg) + messages
+                scope.launch {
+                    val payload = when (mediaType) {
+                        "voice" -> "🎙️ [Голосове повідомлення $duration сек]"
+                        "video_note", "round_video" -> "⭕ [Відео-кружечок $duration сек]"
+                        "photo" -> "🖼️ [Фотографія]"
+                        "video" -> "🎥 [Відео]"
+                        "audio" -> "🎵 $text"
+                        "file" -> "📁 $text"
+                        else -> text
+                    }
+                    YumigramBridge.sendMessage(selectedChat!!.id, payload)
+                }
             }
         )
     } else {

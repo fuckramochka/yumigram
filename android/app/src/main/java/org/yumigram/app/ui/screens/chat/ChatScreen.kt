@@ -43,10 +43,7 @@ import kotlinx.coroutines.launch
 import org.yumigram.app.bridge.ChatModel
 import org.yumigram.app.bridge.MessageModel
 import org.yumigram.app.bridge.YumigramBridge
-import org.yumigram.app.ui.components.FullUserProfileDialog
-import org.yumigram.app.ui.components.MediaViewerDialog
-import org.yumigram.app.ui.components.PollWidget
-import org.yumigram.app.ui.components.VoiceMessageBubble
+import org.yumigram.app.ui.components.*
 import org.yumigram.app.ui.screens.settings.IndicatorStyle
 import org.yumigram.app.ui.theme.ChatWallpaper
 import org.yumigram.app.ui.theme.DeletedRed
@@ -94,7 +91,8 @@ fun ChatScreen(
     messages: List<MessageModel>,
     indicatorStyle: IndicatorStyle = IndicatorStyle.DOTS,
     onBack: () -> Unit,
-    onSendMessage: (String) -> Unit
+    onSendMessage: (String) -> Unit,
+    onSendRichMessage: ((text: String, mediaType: String?, mediaPath: String?, duration: Int?) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -109,6 +107,10 @@ fun ChatScreen(
     var showMenu by remember { mutableStateOf(false) }
     var pinnedMessage by remember { mutableStateOf<MessageModel?>(null) }
 
+    var isRecordingVoice by remember { mutableStateOf(false) }
+    var showRecordVideoNote by remember { mutableStateOf(false) }
+    var showAttachmentMenu by remember { mutableStateOf(false) }
+
     val currentWallpaper by ThemeManager.chatWallpaper.collectAsState()
     val customWallpaperUri by ThemeManager.customWallpaperUri.collectAsState()
 
@@ -121,10 +123,19 @@ fun ChatScreen(
         }
     }
 
+    fun dispatchMessage(text: String, mediaType: String? = null, mediaPath: String? = null, duration: Int? = null) {
+        if (onSendRichMessage != null) {
+            onSendRichMessage(text, mediaType, mediaPath, duration)
+        } else {
+            onSendMessage(text)
+        }
+        scope.launch { listState.animateScrollToItem(0) }
+    }
+
     // Screen-level horizontal drag: swipe right to close chat
     var totalDragX by remember { mutableFloatStateOf(0f) }
 
-    // Auto-scroll to newly sent or received message (index 0 because reverseLayout = true)
+    // Auto-scroll to newly sent or received message
     LaunchedEffect(messages.firstOrNull()?.id) {
         if (messages.isNotEmpty()) {
             listState.animateScrollToItem(0)
@@ -181,7 +192,7 @@ fun ChatScreen(
                                     modifier = Modifier
                                         .size(42.dp)
                                         .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primaryContainer),
+                                        .background(MaterialTheme.colorScheme.primaryContainer),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
@@ -378,62 +389,119 @@ fun ChatScreen(
                     }
                 }
 
-                // Input bar in Pixel OS pill shape with emoji/sticker toggle
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 10.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(
-                        onClick = { showEmojiStickerTray = !showEmojiStickerTray },
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (showEmojiStickerTray) Icons.Rounded.Keyboard else Icons.Rounded.Mood,
-                            contentDescription = "Емодзі та стікери",
-                            tint = if (showEmojiStickerTray) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(4.dp))
-
-                    TextField(
-                        value = inputText,
-                        onValueChange = { inputText = it },
-                        placeholder = { Text("Повідомлення...") },
-                        modifier = Modifier
-                            .weight(1f)
-                            .heightIn(min = 48.dp),
-                        shape = RoundedCornerShape(24.dp),
-                        colors = TextFieldDefaults.colors(
-                            focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent,
-                            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
-                        )
-                    )
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    FilledIconButton(
-                        onClick = {
-                            if (inputText.isNotBlank()) {
-                                onSendMessage(inputText)
-                                inputText = ""
-                                replyingTo = null
-                                scope.launch {
-                                    listState.animateScrollToItem(0)
-                                }
-                            }
+                // Input bar or Voice Recording Bar
+                if (isRecordingVoice) {
+                    VoiceRecordBar(
+                        onCancel = { isRecordingVoice = false },
+                        onSendVoice = { duration ->
+                            isRecordingVoice = false
+                            dispatchMessage(
+                                text = "🎙️ Голосове повідомлення ($duration сек)",
+                                mediaType = "voice",
+                                duration = duration
+                            )
                         },
-                        modifier = Modifier.size(48.dp),
-                        shape = CircleShape
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+                    )
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.Send,
-                            contentDescription = "Надіслати"
+                        // Emoji / Stickers Toggle
+                        IconButton(
+                            onClick = { showEmojiStickerTray = !showEmojiStickerTray },
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (showEmojiStickerTray) Icons.Rounded.Keyboard else Icons.Rounded.Mood,
+                                contentDescription = "Емодзі та стікери",
+                                tint = if (showEmojiStickerTray) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        // Attach Button (📎)
+                        IconButton(
+                            onClick = { showAttachmentMenu = true },
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.AttachFile,
+                                contentDescription = "Вкладення",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(2.dp))
+
+                        // Message Text Field
+                        TextField(
+                            value = inputText,
+                            onValueChange = { inputText = it },
+                            placeholder = { Text("Повідомлення...") },
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 44.dp),
+                            shape = RoundedCornerShape(22.dp),
+                            colors = TextFieldDefaults.colors(
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
                         )
+
+                        Spacer(modifier = Modifier.width(6.dp))
+
+                        // Action Buttons: Send if text is not blank, otherwise Mic & Video Circle!
+                        if (inputText.isNotBlank()) {
+                            FilledIconButton(
+                                onClick = {
+                                    dispatchMessage(inputText)
+                                    inputText = ""
+                                    replyingTo = null
+                                },
+                                modifier = Modifier.size(44.dp),
+                                shape = CircleShape
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Rounded.Send,
+                                    contentDescription = "Надіслати"
+                                )
+                            }
+                        } else {
+                            // Mic Button (Голосові)
+                            FilledTonalIconButton(
+                                onClick = { isRecordingVoice = true },
+                                modifier = Modifier.size(40.dp),
+                                shape = CircleShape
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Mic,
+                                    contentDescription = "Голосове повідомлення",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(4.dp))
+
+                            // Video Circle Button (Кружечки)
+                            FilledTonalIconButton(
+                                onClick = { showRecordVideoNote = true },
+                                modifier = Modifier.size(40.dp),
+                                shape = CircleShape
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.RadioButtonChecked,
+                                    contentDescription = "Кружечок",
+                                    tint = Color(0xFF00E5FF),
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -532,9 +600,8 @@ fun ChatScreen(
                                                 .fillMaxWidth()
                                                 .height(64.dp)
                                                 .clickable {
-                                                    onSendMessage(sticker)
+                                                    dispatchMessage(sticker, mediaType = "sticker")
                                                     showEmojiStickerTray = false
-                                                    scope.launch { listState.animateScrollToItem(0) }
                                                 }
                                         ) {
                                             Box(
@@ -562,9 +629,11 @@ fun ChatScreen(
                                 ) {
                                     Button(
                                         onClick = {
-                                            onSendMessage("📊 Опитування: Яка нова функція Yumigram найкраща?")
+                                            dispatchMessage(
+                                                text = "📊 Опитування: Яка нова функція Yumigram найкраща?",
+                                                mediaType = "poll"
+                                            )
                                             showEmojiStickerTray = false
-                                            scope.launch { listState.animateScrollToItem(0) }
                                         },
                                         shape = RoundedCornerShape(16.dp),
                                         modifier = Modifier.fillMaxWidth()
@@ -653,6 +722,51 @@ fun ChatScreen(
         }
     }
 
+    // Attachment Bottom Sheet
+    if (showAttachmentMenu) {
+        AttachmentBottomSheet(
+            onDismiss = { showAttachmentMenu = false },
+            onSendPhoto = { uri ->
+                dispatchMessage("🖼️ Фотографія", mediaType = "photo", mediaPath = uri.toString())
+            },
+            onSendVideo = { uri ->
+                dispatchMessage("🎥 Відеозапис", mediaType = "video", mediaPath = uri.toString(), duration = 30)
+            },
+            onSendFile = { uri ->
+                val fileName = uri.lastPathSegment?.substringAfterLast('/') ?: "Документ"
+                dispatchMessage("📁 $fileName", mediaType = "file", mediaPath = uri.toString())
+            },
+            onSendAudio = { uri ->
+                val trackName = uri.lastPathSegment?.substringAfterLast('/') ?: "Аудіотрек"
+                dispatchMessage(trackName, mediaType = "audio", mediaPath = uri.toString(), duration = 180)
+            },
+            onSendLocation = { locText ->
+                dispatchMessage(locText, mediaType = "location")
+            },
+            onSendContact = { contactText ->
+                dispatchMessage(contactText, mediaType = "contact")
+            },
+            onRecordVideoNote = {
+                showRecordVideoNote = true
+            }
+        )
+    }
+
+    // Round Video Note Camera Dialog (Кружечки)
+    if (showRecordVideoNote) {
+        RoundVideoRecordDialog(
+            onDismiss = { showRecordVideoNote = false },
+            onSendVideoNote = { duration ->
+                showRecordVideoNote = false
+                dispatchMessage(
+                    text = "⭕ Відео-повідомлення ($duration сек)",
+                    mediaType = "video_note",
+                    duration = duration
+                )
+            }
+        )
+    }
+
     // Full Telegram User Profile Dialog
     if (showChatProfile) {
         FullUserProfileDialog(
@@ -697,7 +811,7 @@ fun MessageBubbleItem(
     var selectedReaction by remember { mutableStateOf<String?>(null) }
     var showReactionMenu by remember { mutableStateOf(false) }
 
-    // Download media when message has photo, sticker, gif, voice, or audio
+    // Download media when message has photo, sticker, gif, video, video_note, voice, or audio
     LaunchedEffect(message.id, message.media_path, message.media_type) {
         if (localMediaPath.isNullOrEmpty() && message.media_type != null) {
             try {
@@ -705,7 +819,9 @@ fun MessageBubbleItem(
                     "photo" -> "jpg"
                     "sticker" -> "webp"
                     "gif" -> "mp4"
-                    "voice", "audio" -> "ogg"
+                    "video", "video_note", "round_video" -> "mp4"
+                    "voice" -> "ogg"
+                    "audio" -> "mp3"
                     else -> "bin"
                 }
                 val mediaDir = File(context.cacheDir, "media").apply { if (!exists()) mkdirs() }
@@ -727,7 +843,10 @@ fun MessageBubbleItem(
 
     var offsetX by remember { mutableFloatStateOf(0f) }
     val isSticker = message.media_type == "sticker"
+    val isRoundVideo = message.media_type == "video_note" || message.media_type == "round_video"
     val isPoll = message.media_type == "poll" || message.text.startsWith("📊")
+    val isLocation = message.media_type == "location" || message.text.startsWith("📍")
+    val isContact = message.media_type == "contact" || message.text.startsWith("👤 Контакт")
 
     val formattedTime = remember(message.date) {
         if (message.date > 0) {
@@ -821,8 +940,15 @@ fun MessageBubbleItem(
                 .offset(x = offsetX.dp),
             contentAlignment = if (message.is_outgoing) Alignment.CenterEnd else Alignment.CenterStart
         ) {
-            if (isSticker) {
-                // Telegram Stickers are rendered WITHOUT colored bubble background!
+            if (isRoundVideo) {
+                // Telegram Video Circle (Кружечки) rendered WITHOUT rectangular bubble
+                VideoNoteBubble(
+                    mediaPath = localMediaPath,
+                    durationSeconds = message.duration ?: 15,
+                    isOutgoing = message.is_outgoing
+                )
+            } else if (isSticker) {
+                // Telegram Stickers rendered WITHOUT colored bubble background!
                 Column(
                     modifier = Modifier
                         .widthIn(max = 200.dp)
@@ -1021,6 +1147,38 @@ fun MessageBubbleItem(
                             Spacer(modifier = Modifier.height(6.dp))
                         }
 
+                        // Video message card
+                        if (message.media_type == "video") {
+                            VideoMessageCard(
+                                mediaPath = localMediaPath,
+                                durationSeconds = message.duration,
+                                onVideoClick = { onMediaClick(message.copy(media_path = localMediaPath)) }
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                        }
+
+                        // Music / Audio player card
+                        if (message.media_type == "audio") {
+                            AudioMessageCard(
+                                trackName = message.text,
+                                durationSeconds = message.duration ?: 210,
+                                isOutgoing = message.is_outgoing
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                        }
+
+                        // Location map card
+                        if (isLocation) {
+                            LocationMessageCard(locationText = message.text)
+                            Spacer(modifier = Modifier.height(6.dp))
+                        }
+
+                        // Contact card
+                        if (isContact) {
+                            ContactMessageCard(contactInfo = message.text)
+                            Spacer(modifier = Modifier.height(6.dp))
+                        }
+
                         // Poll widget
                         if (isPoll) {
                             PollWidget(
@@ -1030,8 +1188,8 @@ fun MessageBubbleItem(
                             Spacer(modifier = Modifier.height(6.dp))
                         }
 
-                        // Voice / Audio message player
-                        if (message.media_type == "voice" || message.media_type == "audio") {
+                        // Voice message player
+                        if (message.media_type == "voice") {
                             VoiceMessageBubble(
                                 mediaPath = localMediaPath,
                                 durationSeconds = message.duration,
@@ -1066,8 +1224,9 @@ fun MessageBubbleItem(
                             Spacer(modifier = Modifier.height(4.dp))
                         }
 
-                        // Main message text (if not voice, poll, or file placeholder)
-                        if (message.media_type != "voice" && !isPoll && message.text.isNotBlank()) {
+                        // Main message text (if not voice, poll, file, location, contact, audio, video)
+                        val isRichSpecial = message.media_type in listOf("voice", "audio", "video") || isPoll || isLocation || isContact
+                        if (!isRichSpecial && message.text.isNotBlank()) {
                             Text(
                                 text = message.text,
                                 fontSize = 15.sp,
