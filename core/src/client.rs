@@ -1,6 +1,9 @@
 use grammers_client::client::{LoginToken, PasswordToken, SignInError};
 use grammers_client::Client;
+use grammers_client::message::InputMessage;
+use grammers_client::media::Attribute;
 use grammers_mtsender::{SenderPool, UpdatesConfiguration};
+use grammers_tl_types as tl;
 use crate::session::FileSession;
 use grammers_session::types::PeerRef;
 use grammers_session::updates::UpdatesLike;
@@ -355,13 +358,56 @@ impl TelegramManager {
                     Some(grammers_client::media::Media::Photo(_)) => (Some("photo".to_string()), None),
                     Some(grammers_client::media::Media::Sticker(_)) => (Some("sticker".to_string()), None),
                     Some(grammers_client::media::Media::Poll(_)) => (Some("poll".to_string()), None),
+                    Some(grammers_client::media::Media::Contact(_)) => (Some("contact".to_string()), None),
+                    Some(grammers_client::media::Media::Geo(_))
+                    | Some(grammers_client::media::Media::GeoLive(_))
+                    | Some(grammers_client::media::Media::Venue(_)) => (Some("location".to_string()), None),
                     Some(grammers_client::media::Media::Document(ref doc)) => {
+                        use tl::enums::Document as D;
+                        let mut is_voice = false;
+                        let mut is_round_video = false;
+                        let mut is_video = false;
+                        let mut is_audio = false;
+                        let mut is_sticker = false;
+                        let mut dur: Option<i32> = None;
+
+                        if let Some(D::Document(d)) = doc.raw.document.as_ref() {
+                            for attr in &d.attributes {
+                                match attr {
+                                    tl::enums::DocumentAttribute::Audio(a) => {
+                                        dur = Some(a.duration);
+                                        if a.voice {
+                                            is_voice = true;
+                                        } else {
+                                            is_audio = true;
+                                        }
+                                    }
+                                    tl::enums::DocumentAttribute::Video(v) => {
+                                        dur = Some(v.duration as i32);
+                                        if v.round_message {
+                                            is_round_video = true;
+                                        } else {
+                                            is_video = true;
+                                        }
+                                    }
+                                    tl::enums::DocumentAttribute::Sticker(_) => {
+                                        is_sticker = true;
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+
                         let mime = doc.mime_type().unwrap_or("");
-                        if mime.starts_with("audio/") || mime.contains("ogg") {
-                            (Some("voice".to_string()), None)
-                        } else if mime.starts_with("video/") {
-                            (Some("video".to_string()), None)
-                        } else if mime == "image/webp" || mime.contains("tgsticker") || mime.contains("sticker") {
+                        if is_round_video {
+                            (Some("video_note".to_string()), dur)
+                        } else if is_voice || mime.starts_with("audio/ogg") {
+                            (Some("voice".to_string()), dur)
+                        } else if is_video || mime.starts_with("video/") {
+                            (Some("video".to_string()), dur)
+                        } else if is_audio || mime.starts_with("audio/") {
+                            (Some("audio".to_string()), dur)
+                        } else if is_sticker || mime == "image/webp" || mime.contains("tgsticker") || mime.contains("sticker") {
                             (Some("sticker".to_string()), None)
                         } else if mime.contains("gif") {
                             (Some("gif".to_string()), None)
@@ -435,6 +481,176 @@ impl TelegramManager {
             Ok(item)
         } else {
             Err("Не знайдено дескриптор чату для відправки".into())
+        }
+    }
+
+    /// Uploads and sends real media through Telegram MTProto servers
+    pub async fn send_media_file(
+        &self,
+        db: &LocalDatabase,
+        chat_id: i64,
+        file_path: &str,
+        media_type: &str,
+        caption: &str,
+        duration: i32,
+    ) -> Result<MessageItem, Box<dyn std::error::Error + Send + Sync>> {
+        let client_lock = self.client.lock().await;
+        let cache = self.peer_cache.lock().await;
+
+        if let (Some(client), Some(&peer_ref)) = (client_lock.as_ref(), cache.get(&chat_id)) {
+            let mut input_msg = InputMessage::new();
+            if !caption.is_empty() {
+                input_msg = input_msg.text(caption);
+            }
+
+            match media_type {
+                "photo" => {
+                    let uploaded = client.upload_file(file_path).await?;
+                    input_msg = input_msg.photo(uploaded);
+                }
+                "voice" => {
+                    let uploaded = client.upload_file(file_path).await?;
+                    let dur = if duration > 0 { duration as u64 } else { 1 };
+                    input_msg = input_msg.document(uploaded).attribute(
+                        Attribute::Voice {
+                            duration: std::time::Duration::from_secs(dur),
+                            waveform: None,
+                        },
+                    );
+                }
+                "video_note" | "round_video" => {
+                    let uploaded = client.upload_file(file_path).await?;
+                    let dur = if duration > 0 { duration as u64 } else { 1 };
+                    input_msg = input_msg.document(uploaded).attribute(
+                        Attribute::Video {
+                            round_message: true,
+                            supports_streaming: true,
+                            duration: std::time::Duration::from_secs(dur),
+                            w: 384,
+                            h: 384,
+                        },
+                    );
+                }
+                "video" => {
+                    let uploaded = client.upload_file(file_path).await?;
+                    let dur = if duration > 0 { duration as u64 } else { 1 };
+                    input_msg = input_msg.document(uploaded).attribute(
+                        Attribute::Video {
+                            round_message: false,
+                            supports_streaming: true,
+                            duration: std::time::Duration::from_secs(dur),
+                            w: 1280,
+                            h: 720,
+                        },
+                    );
+                }
+                "audio" | "music" => {
+                    let uploaded = client.upload_file(file_path).await?;
+                    let file_title = Path::new(file_path)
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("Audio Track");
+                    let dur = if duration > 0 { duration as u64 } else { 180 };
+                    input_msg = input_msg.document(uploaded).attribute(
+                        Attribute::Audio {
+                            duration: std::time::Duration::from_secs(dur),
+                            title: Some(file_title.to_string()),
+                            performer: Some("Yumigram Music".to_string()),
+                        },
+                    );
+                }
+                "location" => {
+                    let coords: Vec<&str> = file_path.split(',').collect();
+                    let (lat, lon) = if coords.len() == 2 {
+                        (
+                            coords[0].trim().parse::<f64>().unwrap_or(50.4501),
+                            coords[1].trim().parse::<f64>().unwrap_or(30.5234),
+                        )
+                    } else {
+                        (50.4501, 30.5234)
+                    };
+                    input_msg = input_msg.media(tl::types::InputMediaGeoPoint {
+                        geo_point: tl::enums::InputGeoPoint::Point(tl::types::InputGeoPoint {
+                            lat,
+                            long: lon,
+                            accuracy_radius: None,
+                        }),
+                    });
+                }
+                "contact" => {
+                    let parts: Vec<&str> = file_path.split('|').collect();
+                    let phone = parts.first().unwrap_or(&"+380680000000").to_string();
+                    let first_name = parts.get(1).unwrap_or(&"Контакт").to_string();
+                    let last_name = parts.get(2).unwrap_or(&"").to_string();
+                    input_msg = input_msg.media(tl::types::InputMediaContact {
+                        phone_number: phone,
+                        first_name,
+                        last_name,
+                        vcard: String::new(),
+                    });
+                }
+                _ => {
+                    let uploaded = client.upload_file(file_path).await?;
+                    let file_name = Path::new(file_path)
+                        .file_name()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("document");
+                    input_msg = input_msg.document(uploaded).attribute(
+                        Attribute::FileName(file_name.to_string()),
+                    );
+                }
+            }
+
+            let sent = client.send_message(peer_ref, input_msg).await?;
+            let item = MessageItem {
+                id: sent.id(),
+                chat_id,
+                sender_id: 0,
+                sender_name: "Я".into(),
+                text: if !caption.is_empty() {
+                    caption.to_string()
+                } else {
+                    sent.text().to_string()
+                },
+                date: sent.date().as_second(),
+                is_outgoing: true,
+                is_read: false,
+                reply_to_id: None,
+                is_deleted: false,
+                original_text: None,
+                media_type: Some(media_type.to_string()),
+                media_path: Some(file_path.to_string()),
+                duration: if duration > 0 { Some(duration) } else { None },
+            };
+            let _ = db.save_message(&item);
+            Ok(item)
+        } else {
+            // Local fallback when offline
+            let fake_id = (std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() % 2000000000) as i32;
+            let item = MessageItem {
+                id: fake_id,
+                chat_id,
+                sender_id: 0,
+                sender_name: "Я".into(),
+                text: caption.to_string(),
+                date: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs() as i64,
+                is_outgoing: true,
+                is_read: false,
+                reply_to_id: None,
+                is_deleted: false,
+                original_text: None,
+                media_type: Some(media_type.to_string()),
+                media_path: Some(file_path.to_string()),
+                duration: if duration > 0 { Some(duration) } else { None },
+            };
+            let _ = db.save_message(&item);
+            Ok(item)
         }
     }
 

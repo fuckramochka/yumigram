@@ -344,6 +344,53 @@ pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeSendMes
 }
 
 #[unsafe(no_mangle)]
+pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeSendMedia(
+    mut env: JNIEnv,
+    _class: JClass,
+    chat_id: jlong,
+    file_path: JString,
+    media_type: JString,
+    caption: JString,
+    duration: jint,
+) -> jstring {
+    let raw_file_path: String = match env.get_string(&file_path) {
+        Ok(s) => s.into(),
+        Err(_) => return safe_jstring(&mut env, "{\"success\":false,\"message\":\"Invalid file path\"}"),
+    };
+    let raw_media_type: String = match env.get_string(&media_type) {
+        Ok(s) => s.into(),
+        Err(_) => return safe_jstring(&mut env, "{\"success\":false,\"message\":\"Invalid media type\"}"),
+    };
+    let raw_caption: String = match env.get_string(&caption) {
+        Ok(s) => s.into(),
+        Err(_) => String::new(),
+    };
+
+    let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        if let Some(state) = get_state() {
+            let tg = state.tg.clone();
+            let db = state.db.clone();
+            match state.rt.block_on(tg.send_media_file(
+                &db,
+                chat_id,
+                &raw_file_path,
+                &raw_media_type,
+                &raw_caption,
+                duration as i32,
+            )) {
+                Ok(msg) => serde_json::to_string(&msg).unwrap_or_else(|_| "{\"success\":false}".into()),
+                Err(e) => format!("{{\"success\":false,\"message\":\"{}\"}}", e),
+            }
+        } else {
+            "{\"success\":false,\"message\":\"State not initialized\"}".to_string()
+        }
+    }));
+
+    let result = res.unwrap_or_else(|_| "{\"success\":false,\"message\":\"Internal panic\"}".to_string());
+    safe_jstring(&mut env, &result)
+}
+
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_org_yumigram_app_bridge_YumigramBridge_nativeGetChats(
     mut env: JNIEnv,
     _class: JClass,

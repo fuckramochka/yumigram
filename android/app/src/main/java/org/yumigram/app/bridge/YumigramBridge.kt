@@ -147,6 +147,7 @@ object YumigramBridge {
     external fun nativeFetchLiveChats(limit: Int): String
     external fun nativeFetchLiveMessages(chatId: Long, limit: Int): String
     external fun nativeSendMessage(chatId: Long, text: String): String
+    external fun nativeSendMedia(chatId: Long, filePath: String, mediaType: String, caption: String, duration: Int): String
     external fun nativeGetChats(): String
     external fun nativeGetMessages(chatId: Long, limit: Int, offset: Int): String
     external fun nativeSaveChat(chatJson: String): Boolean
@@ -239,6 +240,23 @@ object YumigramBridge {
         try {
             json.decodeFromString<MessageModel>(raw)
         } catch (_: Exception) {
+            null
+        }
+    }
+
+    suspend fun sendMedia(
+        chatId: Long,
+        filePath: String,
+        mediaType: String,
+        caption: String = "",
+        duration: Int = 0
+    ): MessageModel? = withContext(Dispatchers.IO) {
+        if (!isLoaded) return@withContext null
+        try {
+            val raw = nativeSendMedia(chatId, filePath, mediaType, caption, duration)
+            json.decodeFromString<MessageModel>(raw)
+        } catch (e: Exception) {
+            android.util.Log.e("YumigramBridge", "sendMedia error", e)
             null
         }
     }

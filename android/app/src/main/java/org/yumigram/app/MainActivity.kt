@@ -3,8 +3,10 @@ package org.yumigram.app
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
+import java.io.File
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.Crossfade
@@ -67,6 +69,30 @@ class MainActivity : ComponentActivity() {
                 RootNavigationContainer()
             }
         }
+    }
+}
+
+fun resolveContentUriToCacheFile(context: Context, uri: Uri, mediaType: String?): String {
+    return try {
+        val ext = when (mediaType) {
+            "photo" -> "jpg"
+            "video" -> "mp4"
+            "audio" -> "mp3"
+            "voice" -> "m4a"
+            "video_note", "round_video" -> "mp4"
+            else -> "bin"
+        }
+        val uploadDir = File(context.cacheDir, "media_upload").apply { if (!exists()) mkdirs() }
+        val targetFile = File(uploadDir, "upload_${System.currentTimeMillis()}.$ext")
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            targetFile.outputStream().use { output ->
+                input.copyTo(output)
+            }
+        }
+        targetFile.absolutePath
+    } catch (e: Throwable) {
+        android.util.Log.e("MainActivity", "resolveContentUriToCacheFile error", e)
+        ""
     }
 }
 
@@ -245,16 +271,50 @@ fun MainAppContainer(
                 )
                 messages = listOf(richMsg) + messages
                 scope.launch {
-                    val payload = when (mediaType) {
-                        "voice" -> "🎙️ [Голосове повідомлення $duration сек]"
-                        "video_note", "round_video" -> "⭕ [Відео-кружечок $duration сек]"
-                        "photo" -> "🖼️ [Фотографія]"
-                        "video" -> "🎥 [Відео]"
-                        "audio" -> "🎵 $text"
-                        "file" -> "📁 $text"
-                        else -> text
+                    try {
+                        val currentChatId = selectedChat?.id ?: return@launch
+                        val realPath = if (mediaPath != null && mediaPath.startsWith("content://")) {
+                            resolveContentUriToCacheFile(context, Uri.parse(mediaPath), mediaType)
+                        } else {
+                            mediaPath ?: ""
+                        }
+
+                        val sentMsg = if (mediaType != null && realPath.isNotBlank()) {
+                            val cleanType = when (mediaType) {
+                                "round_video" -> "video_note"
+                                else -> mediaType
+                            }
+                            val captionText = when (mediaType) {
+                                "photo", "video", "file", "audio" -> {
+                                    if (text.startsWith("🖼️") || text.startsWith("🎥") || text.startsWith("📁")) "" else text
+                                }
+                                else -> ""
+                            }
+                            YumigramBridge.sendMedia(
+                                chatId = currentChatId,
+                                filePath = realPath,
+                                mediaType = cleanType,
+                                caption = captionText,
+                                duration = duration ?: 0
+                            )
+                        } else if (mediaType == "location" || mediaType == "contact") {
+                            YumigramBridge.sendMedia(
+                                chatId = currentChatId,
+                                filePath = realPath.ifBlank { text },
+                                mediaType = mediaType,
+                                caption = text,
+                                duration = 0
+                            )
+                        } else {
+                            YumigramBridge.sendMessage(currentChatId, text)
+                        }
+
+                        if (sentMsg != null) {
+                            messages = messages.map { if (it.id == localId) sentMsg else it }
+                        }
+                    } catch (e: Throwable) {
+                        android.util.Log.e("MainActivity", "Failed to send real media", e)
                     }
-                    YumigramBridge.sendMessage(selectedChat!!.id, payload)
                 }
             }
         )

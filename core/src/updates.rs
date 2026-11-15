@@ -3,6 +3,7 @@ use crate::models::{ChatItem, MessageItem};
 use grammers_client::client::UpdateStream;
 use grammers_client::media::Media;
 use grammers_client::update::Update;
+use grammers_tl_types as tl;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 
@@ -30,13 +31,60 @@ impl UpdatesEngine {
                         Some(Media::Photo(_)) => (Some("photo".to_string()), None),
                         Some(Media::Sticker(_)) => (Some("sticker".to_string()), None),
                         Some(Media::Poll(_)) => (Some("poll".to_string()), None),
+                        Some(Media::Contact(_)) => (Some("contact".to_string()), None),
+                        Some(Media::Geo(_))
+                        | Some(Media::GeoLive(_))
+                        | Some(Media::Venue(_)) => (Some("location".to_string()), None),
                         Some(Media::Document(ref doc)) => {
+                            use tl::enums::Document as D;
+                            let mut is_voice = false;
+                            let mut is_round_video = false;
+                            let mut is_video = false;
+                            let mut is_audio = false;
+                            let mut is_sticker = false;
+                            let mut dur: Option<i32> = None;
+
+                            if let Some(D::Document(d)) = doc.raw.document.as_ref() {
+                                for attr in &d.attributes {
+                                    match attr {
+                                        tl::enums::DocumentAttribute::Audio(a) => {
+                                            dur = Some(a.duration);
+                                            if a.voice {
+                                                is_voice = true;
+                                            } else {
+                                                is_audio = true;
+                                            }
+                                        }
+                                        tl::enums::DocumentAttribute::Video(v) => {
+                                            dur = Some(v.duration as i32);
+                                            if v.round_message {
+                                                is_round_video = true;
+                                            } else {
+                                                is_video = true;
+                                            }
+                                        }
+                                        tl::enums::DocumentAttribute::Sticker(_) => {
+                                            is_sticker = true;
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                            }
+
                             let mime = doc.mime_type().unwrap_or("");
-                            if mime.starts_with("audio/") || mime.contains("ogg") {
-                                (Some("voice".to_string()), None)
-                            } else if mime.starts_with("video/") {
-                                (Some("video".to_string()), None)
-                            } else if mime == "image/webp" || mime.contains("tgsticker") || mime.contains("sticker") {
+                            if is_round_video {
+                                (Some("video_note".to_string()), dur)
+                            } else if is_voice || mime.starts_with("audio/ogg") {
+                                (Some("voice".to_string()), dur)
+                            } else if is_video || mime.starts_with("video/") {
+                                (Some("video".to_string()), dur)
+                            } else if is_audio || mime.starts_with("audio/") {
+                                (Some("audio".to_string()), dur)
+                            } else if is_sticker
+                                || mime == "image/webp"
+                                || mime.contains("tgsticker")
+                                || mime.contains("sticker")
+                            {
                                 (Some("sticker".to_string()), None)
                             } else if mime.contains("gif") {
                                 (Some("gif".to_string()), None)

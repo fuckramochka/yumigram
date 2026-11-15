@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -505,13 +506,13 @@ fun ProfileScreen(
             text = {
                 Column {
                     Text(
-                        text = "Нова версія: ${info.versionName}",
+                        text = "Нова версія: ${info.tagName}",
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.primary
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Розмір: ${info.formattedSize()}",
+                        text = "Розмір: ${"%.1f".format(info.apkSize / (1024.0 * 1024.0))} МБ",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -522,7 +523,7 @@ fun ProfileScreen(
                         fontSize = 13.sp
                     )
                     Text(
-                        text = info.changelog.ifBlank { "Покращення стабільності та нові функції." },
+                        text = info.releaseNotes.ifBlank { "Покращення стабільності та нові функції." },
                         style = MaterialTheme.typography.bodySmall,
                         maxLines = 6,
                         overflow = TextOverflow.Ellipsis
@@ -537,15 +538,16 @@ fun ProfileScreen(
                         isDownloading = true
                         downloadProgress = 0f
                         scope.launch {
-                            val apkFile = AppUpdateManager.downloadApk(toDownload) { progress ->
-                                downloadProgress = progress
-                            }
+                            AppUpdateManager.downloadAndInstallApk(
+                                context = context,
+                                downloadUrl = toDownload.downloadUrl,
+                                onProgress = { progress -> downloadProgress = progress },
+                                onError = { err ->
+                                    isDownloading = false
+                                    Toast.makeText(context, err, Toast.LENGTH_LONG).show()
+                                }
+                            )
                             isDownloading = false
-                            if (apkFile != null) {
-                                AppUpdateManager.installApk(context, apkFile)
-                            } else {
-                                Toast.makeText(context, "Помилка завантаження файлу оновлення", Toast.LENGTH_SHORT).show()
-                            }
                         }
                     }
                 ) {

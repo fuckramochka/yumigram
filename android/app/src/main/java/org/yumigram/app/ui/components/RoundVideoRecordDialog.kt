@@ -58,6 +58,7 @@ fun RoundVideoRecordDialog(
     var recordedFile by remember { mutableStateOf<File?>(null) }
     var videoCapture by remember { mutableStateOf<VideoCapture<Recorder>?>(null) }
     var isCameraBound by remember { mutableStateOf(false) }
+    var isFinishingRecording by remember { mutableStateOf(false) }
 
     val permissionsLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -83,6 +84,12 @@ fun RoundVideoRecordDialog(
             while (elapsedSeconds < 60) {
                 delay(1000)
                 elapsedSeconds += 1
+            }
+            if (!isFinishingRecording) {
+                isFinishingRecording = true
+                try {
+                    activeRecording?.stop()
+                } catch (_: Exception) {}
             }
         }
     }
@@ -229,6 +236,14 @@ fun RoundVideoRecordDialog(
                                             if (recordEvent.hasError()) {
                                                 Log.e("RoundVideoRecord", "Recording error: ${recordEvent.error}")
                                             }
+                                            if (isFinishingRecording) {
+                                                val duration = if (elapsedSeconds > 0) elapsedSeconds else 3
+                                                val f = recordedFile
+                                                if (f != null && f.exists() && f.length() > 0) {
+                                                    onSendVideoNote(f.absolutePath, duration)
+                                                }
+                                                onDismiss()
+                                            }
                                         }
                                     }
                                 } catch (e: Exception) {
@@ -318,20 +333,17 @@ fun RoundVideoRecordDialog(
                     // Send Round Video
                     FilledIconButton(
                         onClick = {
+                            isFinishingRecording = true
                             try {
                                 activeRecording?.stop()
-                                activeRecording?.close()
-                            } catch (_: Exception) {}
-
-                            val duration = if (elapsedSeconds > 0) elapsedSeconds else 5
-                            val f = recordedFile
-                            if (f != null && f.exists() && f.length() > 0) {
-                                onSendVideoNote(f.absolutePath, duration)
-                            } else {
-                                // If recording output was interrupted, provide valid video file path
-                                onSendVideoNote(f?.absolutePath ?: "", duration)
+                            } catch (_: Exception) {
+                                val duration = if (elapsedSeconds > 0) elapsedSeconds else 3
+                                val f = recordedFile
+                                if (f != null && f.exists() && f.length() > 0) {
+                                    onSendVideoNote(f.absolutePath, duration)
+                                }
+                                onDismiss()
                             }
-                            onDismiss()
                         },
                         modifier = Modifier.size(64.dp),
                         colors = IconButtonDefaults.filledIconButtonColors(
