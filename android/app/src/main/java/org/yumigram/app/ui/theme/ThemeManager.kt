@@ -13,6 +13,7 @@ enum class ThemeMode(val title: String) {
 }
 
 enum class AccentPalette(val title: String, val primary: Color, val container: Color) {
+    CYBERPUNK("Amegram Purple", Color(0xFF9333EA), Color(0xFFA855F7)),
     PIXEL_BLUE("Pixel Blue", Color(0xFF1A73E8), Color(0xFFD2E3FC)),
     EMERALD("Смарагдовий", Color(0xFF00897B), Color(0xFFB2DFDB)),
     LAVENDER("Лавандовий", Color(0xFF7C4DFF), Color(0xFFD1C4E9)),
@@ -26,7 +27,7 @@ enum class ChatWallpaper(
     val bubbleIncoming: Color,
     val bubbleOutgoing: Color
 ) {
-    DEFAULT("Pixel Dark", Color(0xFF0E1014), Color(0xFF232730), Color(0xFF1A73E8)),
+    DEFAULT("Amegram Cyberpunk", Color(0xFF0C0C10), Color(0xFF18181C), Color(0xFF9333EA)),
     SLATE("Графіт AMOLED", Color(0xFF000000), Color(0xFF16181E), Color(0xFF2E7D32)),
     OCEAN("Океанський бриз", Color(0xFF0B192C), Color(0xFF1E3E62), Color(0xFF00ADB5)),
     VELVET("Оксамит", Color(0xFF1A0B2E), Color(0xFF2E1752), Color(0xFF9C27B0)),

@@ -10,19 +10,28 @@ import java.io.File
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.Crossfade
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -339,55 +348,47 @@ fun MainAppContainer(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        Scaffold(
-            bottomBar = {
-                NavigationBar(
-                    containerColor = MaterialTheme.colorScheme.surface
-                ) {
-                    val navItems = listOf(
-                        Screen.Chats,
-                        Screen.Contacts,
-                        Screen.Settings
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
+        ) {
+            Crossfade(targetState = currentScreen, label = "screen_crossfade") { screen ->
+                when (screen) {
+                    Screen.Chats -> ChatListScreen(
+                        chats = chats,
+                        indicatorStyle = indicatorStyle,
+                        isRefreshing = isRefreshing,
+                        currentUserId = currentUser?.id,
+                        onRefresh = { refreshChats() },
+                        onChatClick = { chat -> selectedChat = chat }
                     )
-                    navItems.forEach { screen ->
-                        NavigationBarItem(
-                            selected = currentScreen == screen,
-                            onClick = { currentScreen = screen },
-                            icon = { Icon(screen.icon, contentDescription = screen.title) },
-                            label = { Text(screen.title) }
-                        )
-                    }
+                    Screen.Contacts -> ContactsScreen(
+                        contacts = chats,
+                        onContactClick = { chat -> selectedChat = chat }
+                    )
+                    Screen.Settings -> SettingsScreen(
+                        currentIndicator = indicatorStyle,
+                        onIndicatorChanged = { indicatorStyle = it },
+                        onLogout = onLogout
+                    )
                 }
             }
-        ) { padding ->
-            Surface(
+        }
+
+        // 1. Floating Island Navigation Bar (Only visible when chat is not open)
+        if (selectedChat == null) {
+            FloatingIslandNavBar(
+                currentScreen = currentScreen,
+                onSelectScreen = { currentScreen = it },
+                currentUser = currentUser,
+                onSearchClick = {
+                    currentScreen = Screen.Chats
+                },
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                color = MaterialTheme.colorScheme.background
-            ) {
-                Crossfade(targetState = currentScreen, label = "screen_crossfade") { screen ->
-                    when (screen) {
-                        Screen.Chats -> ChatListScreen(
-                            chats = chats,
-                            indicatorStyle = indicatorStyle,
-                            isRefreshing = isRefreshing,
-                            currentUserId = currentUser?.id,
-                            onRefresh = { refreshChats() },
-                            onChatClick = { chat -> selectedChat = chat }
-                        )
-                        Screen.Contacts -> ContactsScreen(
-                            contacts = chats,
-                            onContactClick = { chat -> selectedChat = chat }
-                        )
-                        Screen.Settings -> SettingsScreen(
-                            currentIndicator = indicatorStyle,
-                            onIndicatorChanged = { indicatorStyle = it },
-                            onLogout = onLogout
-                        )
-                    }
-                }
-            }
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(bottom = 12.dp, horizontal = 16.dp)
+            )
         }
 
         if (selectedChat != null) {
@@ -562,6 +563,129 @@ fun CrashScreen(
                 ) {
                     Text("Продовжити")
                 }
+            }
+        }
+    }
+}
+
+/**
+ * 1. Amegram / exteraGram Floating Island Navigation Bar
+ * Floating horizontal capsule with dark acrylic glass, miniature user avatar,
+ * soft tab pill, section icons, and separate circular search FAB.
+ */
+@Composable
+fun FloatingIslandNavBar(
+    currentScreen: Screen,
+    onSelectScreen: (Screen) -> Unit,
+    currentUser: UserModel?,
+    onSearchClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Floating horizontal capsule
+        Surface(
+            shape = RoundedCornerShape(32.dp),
+            color = Color(0xFF1E1E24).copy(alpha = 0.94f),
+            border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.12f)),
+            shadowElevation = 10.dp,
+            modifier = Modifier
+                .weight(1f)
+                .height(58.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                // Miniature user avatar (size = 36.dp)
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF2C2C36))
+                        .clickable { onSelectScreen(Screen.Settings) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    val initial = currentUser?.first_name?.firstOrNull()?.uppercaseChar()?.toString() ?: "U"
+                    Text(
+                        text = initial,
+                        color = Color.White,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                // Nav items: Chats, Contacts, Settings
+                val navItems = listOf(Screen.Chats, Screen.Contacts, Screen.Settings)
+                navItems.forEach { screen ->
+                    val isSelected = currentScreen == screen
+                    if (isSelected) {
+                        Surface(
+                            shape = CircleShape,
+                            color = Color(0xFF9333EA),
+                            modifier = Modifier.height(40.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .clickable { onSelectScreen(screen) }
+                                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = screen.icon,
+                                    contentDescription = screen.title,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = screen.title,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+                        }
+                    } else {
+                        IconButton(
+                            onClick = { onSelectScreen(screen) },
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                imageVector = screen.icon,
+                                contentDescription = screen.title,
+                                tint = Color.White.copy(alpha = 0.6f),
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Circular Floating Action Button (FAB) (size = 52.dp, accent color)
+        Surface(
+            shape = CircleShape,
+            color = Color(0xFF9333EA),
+            shadowElevation = 8.dp,
+            modifier = Modifier
+                .size(52.dp)
+                .clip(CircleShape)
+                .clickable { onSearchClick() }
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = Icons.Rounded.Search,
+                    contentDescription = "Пошук",
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
             }
         }
     }

@@ -11,15 +11,19 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -89,7 +93,7 @@ fun getSenderColor(senderId: Long): Color {
     return TELEGRAM_NAME_COLORS[idx]
 }
 
-private val POPULAR_REACTIONS = listOf("👍", "❤️", "🔥", "😂", "😮", "😢", "👏", "🎉")
+private val POPULAR_REACTIONS = listOf("❤️", "🔥", "💊", "😭", "😍", "🤮", "🖕", "👏", "👍", "🔽")
 
 enum class MessageSequence {
     SINGLE,
@@ -103,17 +107,13 @@ fun getMessageSequence(
     messages: List<MessageModel>
 ): MessageSequence {
     val current = messages[currentIndex]
-    // In reverseLayout = true:
-    // Older message (chronologically before, visually above) is at currentIndex + 1
     val prevOlder = messages.getOrNull(currentIndex + 1)
-    // Newer message (chronologically after, visually below) is at currentIndex - 1
     val nextNewer = messages.getOrNull(currentIndex - 1)
 
     fun isSameSeries(a: MessageModel, b: MessageModel?): Boolean {
         if (b == null) return false
         if (a.is_outgoing != b.is_outgoing) return false
         if (!a.is_outgoing && a.sender_id != b.sender_id) return false
-        // Disallow grouping across major time gap (> 5 minutes = 300 seconds)
         if (kotlin.math.abs(a.date - b.date) > 300) return false
         return true
     }
@@ -134,7 +134,6 @@ fun getBubbleShape(
     sequence: MessageSequence
 ): RoundedCornerShape {
     return if (isOutgoing) {
-        // Outgoing: Author is on RIGHT side (topEnd & bottomEnd)
         when (sequence) {
             MessageSequence.SINGLE -> RoundedCornerShape(
                 topStart = 20.dp,
@@ -162,7 +161,6 @@ fun getBubbleShape(
             )
         }
     } else {
-        // Incoming: Author is on LEFT side (topStart & bottomStart)
         when (sequence) {
             MessageSequence.SINGLE -> RoundedCornerShape(
                 topStart = 20.dp,
@@ -225,7 +223,7 @@ fun ChatScreen(
     val currentWallpaper by ThemeManager.chatWallpaper.collectAsState()
     val customWallpaperUri by ThemeManager.customWallpaperUri.collectAsState()
 
-    // 5. Predictive Back Gesture Handler (Android 14+ / Pixel OS Expressive)
+    // Predictive Back Gesture Handler
     val backProgressAnim = remember { Animatable(0f) }
 
     PredictiveBackHandler(enabled = true) { progress: Flow<BackEventCompat> ->
@@ -283,14 +281,12 @@ fun ChatScreen(
         scope.launch { listState.animateScrollToItem(0) }
     }
 
-    // Auto-scroll to newly sent or received message
     LaunchedEffect(messages.firstOrNull()?.id) {
         if (messages.isNotEmpty()) {
             listState.animateScrollToItem(0)
         }
     }
 
-    // Predictive back card morphing values
     val currentProgress = backProgressAnim.value
     val backScale = 1f - (currentProgress * 0.08f)
     val backCornerRadius = (currentProgress * 32f).dp
@@ -308,12 +304,12 @@ fun ChatScreen(
             }
     ) {
         Scaffold(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+            containerColor = Color(0xFF0C0C10),
             topBar = {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surfaceContainerLowest)
+                        .background(Color(0xFF0C0C10))
                 ) {
                     TopAppBar(
                         navigationIcon = {
@@ -321,7 +317,7 @@ fun ChatScreen(
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                                     contentDescription = "Назад",
-                                    tint = MaterialTheme.colorScheme.onSurface
+                                    tint = Color.White
                                 )
                             }
                         },
@@ -332,7 +328,6 @@ fun ChatScreen(
                                     .fillMaxWidth()
                                     .clickable { showChatProfile = true }
                             ) {
-                                // Chat Avatar with Generative Monet Fallback
                                 val avatarFile = remember(chat.avatar_path) {
                                     if (!chat.avatar_path.isNullOrEmpty()) File(chat.avatar_path) else null
                                 }
@@ -363,7 +358,7 @@ fun ChatScreen(
                                                 text = initial,
                                                 fontWeight = FontWeight.ExtraBold,
                                                 fontSize = 17.sp,
-                                                color = monetPalette.onColor
+                                                color = Color.White
                                             )
                                         }
                                     }
@@ -378,7 +373,7 @@ fun ChatScreen(
                                         fontSize = 16.sp,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
-                                        color = MaterialTheme.colorScheme.onSurface
+                                        color = Color.White
                                     )
                                     Text(
                                         text = when (chat.chat_type) {
@@ -388,7 +383,7 @@ fun ChatScreen(
                                             else -> "Чат"
                                         },
                                         fontSize = 12.sp,
-                                        color = MaterialTheme.colorScheme.primary,
+                                        color = Color(0xFFA855F7),
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
@@ -400,55 +395,56 @@ fun ChatScreen(
                                 Icon(
                                     Icons.Rounded.Wallpaper,
                                     contentDescription = "Шпалери",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    tint = Color.White.copy(alpha = 0.7f)
                                 )
                             }
                             IconButton(onClick = { showMenu = true }) {
                                 Icon(
                                     Icons.Rounded.MoreVert,
                                     contentDescription = "Меню",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    tint = Color.White.copy(alpha = 0.7f)
                                 )
                             }
                             DropdownMenu(
                                 expanded = showMenu,
-                                onDismissRequest = { showMenu = false }
+                                onDismissRequest = { showMenu = false },
+                                modifier = Modifier.background(Color(0xFF1E1E26))
                             ) {
                                 DropdownMenuItem(
-                                    text = { Text("👤 Профіль контакту") },
+                                    text = { Text("👤 Профіль контакту", color = Color.White) },
                                     onClick = {
                                         showMenu = false
                                         showChatProfile = true
                                     },
-                                    leadingIcon = { Icon(Icons.Rounded.Person, contentDescription = null) }
+                                    leadingIcon = { Icon(Icons.Rounded.Person, contentDescription = null, tint = Color(0xFFA855F7)) }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("🖼️ Шпалери з галереї") },
+                                    text = { Text("🖼️ Шпалери з галереї", color = Color.White) },
                                     onClick = {
                                         showMenu = false
                                         galleryLauncher.launch("image/*")
                                     },
-                                    leadingIcon = { Icon(Icons.Rounded.Image, contentDescription = null) }
+                                    leadingIcon = { Icon(Icons.Rounded.Image, contentDescription = null, tint = Color(0xFFA855F7)) }
                                 )
                                 if (customWallpaperUri != null) {
                                     DropdownMenuItem(
-                                        text = { Text("❌ Скинути шпалери галереї") },
+                                        text = { Text("❌ Скинути шпалери галереї", color = DeletedRed) },
                                         onClick = {
                                             showMenu = false
                                             ThemeManager.setCustomWallpaperUri(context, null)
                                             Toast.makeText(context, "Шпалери скинуто на стандартні", Toast.LENGTH_SHORT).show()
                                         },
-                                        leadingIcon = { Icon(Icons.Rounded.DeleteOutline, contentDescription = null) }
+                                        leadingIcon = { Icon(Icons.Rounded.DeleteOutline, contentDescription = null, tint = DeletedRed) }
                                     )
                                 }
                             }
                         },
                         colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerLowest
+                            containerColor = Color(0xFF0C0C10)
                         )
                     )
 
-                    // Pinned Message Bar (No hard lines)
+                    // Pinned Message Bar
                     AnimatedVisibility(visible = pinnedMessage != null) {
                         pinnedMessage?.let { pinned ->
                             Surface(
@@ -460,7 +456,8 @@ fun ChatScreen(
                                             scope.launch { listState.animateScrollToItem(index) }
                                         }
                                     },
-                                color = MaterialTheme.colorScheme.surfaceContainerLow
+                                color = Color(0xFF18181F),
+                                border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.06f))
                             ) {
                                 Row(
                                     modifier = Modifier
@@ -473,13 +470,13 @@ fun ChatScreen(
                                             .width(3.dp)
                                             .height(28.dp)
                                             .clip(RoundedCornerShape(2.dp))
-                                            .background(MaterialTheme.colorScheme.primary)
+                                            .background(Color(0xFFA855F7))
                                     )
                                     Spacer(modifier = Modifier.width(10.dp))
                                     Icon(
                                         imageVector = Icons.Rounded.PushPin,
                                         contentDescription = "Pinned",
-                                        tint = MaterialTheme.colorScheme.primary,
+                                        tint = Color(0xFFA855F7),
                                         modifier = Modifier.size(18.dp)
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
@@ -488,14 +485,14 @@ fun ChatScreen(
                                             text = "Закріплене повідомлення",
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.primary
+                                            color = Color(0xFFA855F7)
                                         )
                                         Text(
                                             text = pinned.text.ifBlank { "[Вкладення]" },
                                             fontSize = 12.sp,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            color = Color.White.copy(alpha = 0.7f)
                                         )
                                     }
                                     IconButton(
@@ -514,7 +511,7 @@ fun ChatScreen(
                                             imageVector = Icons.Rounded.Close,
                                             contentDescription = "Відкріпити",
                                             modifier = Modifier.size(16.dp),
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                            tint = Color.White.copy(alpha = 0.6f)
                                         )
                                     }
                                 }
@@ -525,13 +522,12 @@ fun ChatScreen(
             },
             bottomBar = {
                 if (chat.chat_type == "channel") {
-                    // Channels: Broadcast mode bottom bar
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
                             .imePadding()
                             .navigationBarsPadding(),
-                        color = MaterialTheme.colorScheme.surfaceContainerLowest
+                        color = Color(0xFF0C0C10)
                     ) {
                         Box(
                             modifier = Modifier
@@ -552,8 +548,8 @@ fun ChatScreen(
                                     .height(52.dp),
                                 shape = CircleShape,
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                    containerColor = Color(0xFF9333EA),
+                                    contentColor = Color.White
                                 )
                             ) {
                                 Icon(
@@ -571,13 +567,13 @@ fun ChatScreen(
                         }
                     }
                 } else {
-                    // 4. The Input Pill bottom panel (Material 3 Expressive)
+                    // Floating Input Bar (Amegram / exteraGram Floating Pill)
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .imePadding()
                             .navigationBarsPadding()
-                            .background(MaterialTheme.colorScheme.surfaceContainerLowest)
+                            .background(Color(0xFF0C0C10))
                     ) {
                         // Reply preview bar
                         AnimatedVisibility(visible = replyingTo != null) {
@@ -605,137 +601,145 @@ fun ChatScreen(
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
                             )
                         } else {
-                            Row(
+                            // Floating dark acrylic capsule
+                            Surface(
+                                shape = RoundedCornerShape(28.dp),
+                                color = Color(0xFF1E1E24).copy(alpha = 0.96f),
+                                border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.1f)),
+                                shadowElevation = 8.dp,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 10.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                                    .padding(horizontal = 10.dp, vertical = 8.dp)
                             ) {
-                                // Emoji / Stickers Toggle
-                                IconButton(
-                                    onClick = { showEmojiStickerTray = !showEmojiStickerTray },
-                                    modifier = Modifier.size(42.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = if (showEmojiStickerTray) Icons.Rounded.Keyboard else Icons.Rounded.Mood,
-                                        contentDescription = "Емодзі та стікери",
-                                        tint = if (showEmojiStickerTray) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-
-                                // Attach Button (📎)
-                                IconButton(
-                                    onClick = { showAttachmentMenu = true },
-                                    modifier = Modifier.size(42.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.AttachFile,
-                                        contentDescription = "Вкладення",
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.width(4.dp))
-
-                                // The Input Pill: RoundedCornerShape(26.dp) with surfaceContainerHighest
-                                TextField(
-                                    value = inputText,
-                                    onValueChange = { inputText = it },
-                                    placeholder = {
-                                        Text(
-                                            "Повідомлення...",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                                        )
-                                    },
+                                Row(
                                     modifier = Modifier
-                                        .weight(1f)
-                                        .heightIn(min = 52.dp),
-                                    shape = RoundedCornerShape(26.dp),
-                                    colors = TextFieldDefaults.colors(
-                                        focusedIndicatorColor = Color.Transparent,
-                                        unfocusedIndicatorColor = Color.Transparent,
-                                        disabledIndicatorColor = Color.Transparent,
-                                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                        cursorColor = MaterialTheme.colorScheme.primary,
-                                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 6.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    // Emoji / Stickers Toggle
+                                    IconButton(
+                                        onClick = { showEmojiStickerTray = !showEmojiStickerTray },
+                                        modifier = Modifier.size(40.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = if (showEmojiStickerTray) Icons.Rounded.Keyboard else Icons.Rounded.Mood,
+                                            contentDescription = "Емодзі та стікери",
+                                            tint = if (showEmojiStickerTray) Color(0xFFA855F7) else Color.White.copy(alpha = 0.7f)
+                                        )
+                                    }
+
+                                    // Message Input Field
+                                    TextField(
+                                        value = inputText,
+                                        onValueChange = { inputText = it },
+                                        placeholder = {
+                                            Text(
+                                                "Повідомлення...",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = Color.White.copy(alpha = 0.45f)
+                                            )
+                                        },
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .heightIn(min = 46.dp),
+                                        colors = TextFieldDefaults.colors(
+                                            focusedIndicatorColor = Color.Transparent,
+                                            unfocusedIndicatorColor = Color.Transparent,
+                                            disabledIndicatorColor = Color.Transparent,
+                                            focusedContainerColor = Color.Transparent,
+                                            unfocusedContainerColor = Color.Transparent,
+                                            cursorColor = Color(0xFFA855F7),
+                                            focusedTextColor = Color.White,
+                                            unfocusedTextColor = Color.White
+                                        )
                                     )
-                                )
 
-                                Spacer(modifier = Modifier.width(6.dp))
+                                    // Attach Button (📎)
+                                    IconButton(
+                                        onClick = { showAttachmentMenu = true },
+                                        modifier = Modifier.size(40.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.AttachFile,
+                                            contentDescription = "Вкладення",
+                                            tint = Color.White.copy(alpha = 0.7f)
+                                        )
+                                    }
 
-                                val sendRotate by animateFloatAsState(
-                                    targetValue = if (inputText.isNotBlank()) 0f else -45f,
-                                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
-                                    label = "sendRotate"
-                                )
+                                    Spacer(modifier = Modifier.width(4.dp))
 
-                                // Morphing Action Button (Mic ⟷ Send) with Spring Physics
-                                AnimatedContent(
-                                    targetState = inputText.isNotBlank(),
-                                    transitionSpec = {
-                                        (scaleIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)) + fadeIn())
-                                            .togetherWith(scaleOut() + fadeOut())
-                                    },
-                                    label = "ActionMorph"
-                                ) { hasText ->
-                                    if (hasText) {
-                                        FilledIconButton(
-                                            onClick = {
-                                                dispatchMessage(inputText)
-                                                inputText = ""
-                                            },
-                                            modifier = Modifier
-                                                .size(48.dp)
-                                                .graphicsLayer { rotationZ = sendRotate },
-                                            shape = CircleShape,
-                                            colors = IconButtonDefaults.filledIconButtonColors(
-                                                containerColor = MaterialTheme.colorScheme.primary,
-                                                contentColor = MaterialTheme.colorScheme.onPrimary
-                                            )
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.AutoMirrored.Rounded.Send,
-                                                contentDescription = "Надіслати",
-                                                modifier = Modifier.size(22.dp)
-                                            )
-                                        }
-                                    } else {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            FilledTonalIconButton(
-                                                onClick = { isRecordingVoice = true },
-                                                modifier = Modifier.size(42.dp),
+                                    val sendRotate by animateFloatAsState(
+                                        targetValue = if (inputText.isNotBlank()) 0f else -45f,
+                                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+                                        label = "sendRotate"
+                                    )
+
+                                    // Morphing Action Button (Mic ⟷ Send) in Neon Purple
+                                    AnimatedContent(
+                                        targetState = inputText.isNotBlank(),
+                                        transitionSpec = {
+                                            (scaleIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)) + fadeIn())
+                                                .togetherWith(scaleOut() + fadeOut())
+                                        },
+                                        label = "ActionMorph"
+                                    ) { hasText ->
+                                        if (hasText) {
+                                            FilledIconButton(
+                                                onClick = {
+                                                    dispatchMessage(inputText)
+                                                    inputText = ""
+                                                },
+                                                modifier = Modifier
+                                                    .size(44.dp)
+                                                    .graphicsLayer { rotationZ = sendRotate },
                                                 shape = CircleShape,
-                                                colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                                    contentColor = MaterialTheme.colorScheme.primary
+                                                colors = IconButtonDefaults.filledIconButtonColors(
+                                                    containerColor = Color(0xFF9333EA),
+                                                    contentColor = Color.White
                                                 )
                                             ) {
                                                 Icon(
-                                                    imageVector = Icons.Rounded.Mic,
-                                                    contentDescription = "Голосове повідомлення",
+                                                    imageVector = Icons.AutoMirrored.Rounded.Send,
+                                                    contentDescription = "Надіслати",
                                                     modifier = Modifier.size(22.dp)
                                                 )
                                             }
+                                        } else {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                FilledTonalIconButton(
+                                                    onClick = { isRecordingVoice = true },
+                                                    modifier = Modifier.size(42.dp),
+                                                    shape = CircleShape,
+                                                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                                        containerColor = Color(0xFF9333EA),
+                                                        contentColor = Color.White
+                                                    )
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Rounded.Mic,
+                                                        contentDescription = "Голосове повідомлення",
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                }
 
-                                            Spacer(modifier = Modifier.width(4.dp))
+                                                Spacer(modifier = Modifier.width(4.dp))
 
-                                            FilledTonalIconButton(
-                                                onClick = { showRecordVideoNote = true },
-                                                modifier = Modifier.size(42.dp),
-                                                shape = CircleShape,
-                                                colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                                    contentColor = MaterialTheme.colorScheme.primary
-                                                )
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Rounded.RadioButtonChecked,
-                                                    contentDescription = "Кружечок",
-                                                    modifier = Modifier.size(22.dp)
-                                                )
+                                                FilledTonalIconButton(
+                                                    onClick = { showRecordVideoNote = true },
+                                                    modifier = Modifier.size(42.dp),
+                                                    shape = CircleShape,
+                                                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                                        containerColor = Color(0xFF252532),
+                                                        contentColor = Color(0xFFA855F7)
+                                                    )
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Rounded.RadioButtonChecked,
+                                                        contentDescription = "Кружечок",
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -764,7 +768,7 @@ fun ChatScreen(
             }
         ) { padding ->
             val chatBgColor = if (customWallpaperUri.isNullOrEmpty() && currentWallpaper == ChatWallpaper.DEFAULT) {
-                MaterialTheme.colorScheme.surfaceContainerLowest
+                Color(0xFF0C0C10)
             } else {
                 currentWallpaper.backgroundColor
             }
@@ -782,15 +786,13 @@ fun ChatScreen(
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
                     )
-                    // Gentle dark tint overlay for readability
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.25f))
+                            .background(Color.Black.copy(alpha = 0.35f))
                     )
                 }
 
-                // 2. Smart Bubbles with sequence chaining
                 LazyColumn(
                     state = listState,
                     modifier = Modifier
@@ -830,7 +832,6 @@ fun ChatScreen(
                             }
                         )
 
-                        // Clustered spacing: closer (3.dp) within same series, wider (10.dp) between bursts
                         val isNextInSeries = sequence == MessageSequence.FIRST || sequence == MessageSequence.MIDDLE
                         Spacer(modifier = Modifier.height(if (isNextInSeries) 3.dp else 10.dp))
                     }
@@ -848,12 +849,12 @@ fun ChatScreen(
                             .padding(bottom = 16.dp, end = 16.dp)
                             .size(46.dp),
                         shape = CircleShape,
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                        containerColor = Color(0xFF1E1E26)
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.KeyboardArrowDown,
                             contentDescription = "Вниз",
-                            tint = MaterialTheme.colorScheme.primary
+                            tint = Color(0xFFA855F7)
                         )
                     }
                 }
@@ -861,162 +862,207 @@ fun ChatScreen(
         }
     }
 
-    // Context Menu Bottom Sheet on Long Press
+    // 4. Sleek Floating Context Menu (Amegram / exteraGram Compact Overlay — NO BottomSheet!)
     if (selectedMessageForMenu != null) {
         val targetMsg = selectedMessageForMenu!!
         val isPinned = pinnedMessage?.id == targetMsg.id
 
-        ModalBottomSheet(
-            onDismissRequest = { selectedMessageForMenu = null },
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+        // Fullscreen semi-transparent backdrop overlay
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.65f))
+                .clickable { selectedMessageForMenu = null },
+            contentAlignment = Alignment.Center
         ) {
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .navigationBarsPadding()
+                    .widthIn(max = 280.dp)
+                    .clickable(enabled = false) {}, // Prevent dismiss when tapping menu itself
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Quick Reactions Row
-                Text(
-                    text = "Швидка реакція",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
-                )
-                LazyRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                // Top: Quick Reactions Bar (horizontal capsule)
+                Surface(
+                    shape = CircleShape,
+                    color = Color(0xFF1E1E24).copy(alpha = 0.98f),
+                    border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.15f)),
+                    shadowElevation = 12.dp
                 ) {
-                    items(POPULAR_REACTIONS.size) { rIdx ->
-                        val reaction = POPULAR_REACTIONS[rIdx]
-                        Box(
-                            modifier = Modifier
-                                .size(44.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surfaceContainerLow)
-                                .clickable {
-                                    scope.launch {
-                                        YumigramBridge.sendReaction(chat.id, targetMsg.id, reaction)
-                                    }
-                                    selectedMessageForMenu = null
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(text = reaction, fontSize = 22.sp)
+                    LazyRow(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        items(POPULAR_REACTIONS) { reaction ->
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .clickable {
+                                        scope.launch {
+                                            YumigramBridge.sendReaction(chat.id, targetMsg.id, reaction)
+                                        }
+                                        selectedMessageForMenu = null
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(text = reaction, fontSize = 20.sp)
+                            }
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
-                // 💬 Відповісти (Reply)
-                ListItem(
-                    headlineContent = { Text("Відповісти", fontWeight = FontWeight.Medium) },
-                    leadingContent = {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.Reply,
-                            contentDescription = "Відповісти",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    },
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(16.dp))
-                        .clickable {
-                            replyingTo = targetMsg
-                            selectedMessageForMenu = null
-                        }
-                )
-
-                // ➡️ Переслати (Forward)
-                ListItem(
-                    headlineContent = { Text("Переслати", fontWeight = FontWeight.Medium) },
-                    leadingContent = {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                            contentDescription = "Переслати",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    },
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(16.dp))
-                        .clickable {
-                            messageToForward = targetMsg
-                            selectedMessageForMenu = null
-                        }
-                )
-
-                // 📌 Закріпити / Відкріпити (Pin/Unpin)
-                ListItem(
-                    headlineContent = {
-                        Text(if (isPinned) "Відкріпити" else "Закріпити", fontWeight = FontWeight.Medium)
-                    },
-                    leadingContent = {
-                        Icon(
-                            imageVector = Icons.Rounded.PushPin,
-                            contentDescription = if (isPinned) "Відкріпити" else "Закріпити",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    },
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(16.dp))
-                        .clickable {
-                            val willUnpin = isPinned
-                            pinnedMessage = if (willUnpin) null else targetMsg
-                            scope.launch {
-                                YumigramBridge.pinMessage(chat.id, targetMsg.id, unpin = willUnpin)
+                // Middle: Compact Vertical Actions Card
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color(0xFF1E1E24).copy(alpha = 0.96f),
+                    border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.12f)),
+                    shadowElevation = 12.dp,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(vertical = 6.dp)) {
+                        ContextMenuItem(
+                            icon = Icons.AutoMirrored.Rounded.Reply,
+                            title = "Відповісти",
+                            tint = Color(0xFFA855F7),
+                            onClick = {
+                                replyingTo = targetMsg
+                                selectedMessageForMenu = null
                             }
-                            Toast.makeText(
-                                context,
-                                if (willUnpin) "Повідомлення відкріплено" else "Повідомлення закріплено",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                            selectedMessageForMenu = null
-                        }
-                )
-
-                // 📋 Копіювати текст (Copy)
-                ListItem(
-                    headlineContent = { Text("Копіювати текст", fontWeight = FontWeight.Medium) },
-                    leadingContent = {
-                        Icon(
-                            imageVector = Icons.Rounded.ContentCopy,
-                            contentDescription = "Копіювати",
-                            tint = MaterialTheme.colorScheme.primary
                         )
-                    },
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(16.dp))
-                        .clickable {
-                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            val clip = ClipData.newPlainText("Message Text", targetMsg.text.ifBlank { targetMsg.media_type ?: "" })
-                            clipboard.setPrimaryClip(clip)
-                            Toast.makeText(context, "Текст скопійовано", Toast.LENGTH_SHORT).show()
-                            selectedMessageForMenu = null
-                        }
-                )
-
-                // 🗑️ Видалити (Delete)
-                ListItem(
-                    headlineContent = { Text("Видалити", fontWeight = FontWeight.Medium, color = DeletedRed) },
-                    leadingContent = {
-                        Icon(
-                            imageVector = Icons.Rounded.Delete,
-                            contentDescription = "Видалити",
-                            tint = DeletedRed
-                        )
-                    },
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(16.dp))
-                        .clickable {
-                            scope.launch {
-                                YumigramBridge.nativeMarkDeleted(chat.id, targetMsg.id)
+                        ContextMenuItem(
+                            icon = Icons.AutoMirrored.Rounded.ArrowForward,
+                            title = "Переслати",
+                            tint = Color.White,
+                            onClick = {
+                                messageToForward = targetMsg
+                                selectedMessageForMenu = null
                             }
-                            Toast.makeText(context, "Повідомлення видалено", Toast.LENGTH_SHORT).show()
-                            selectedMessageForMenu = null
+                        )
+                        ContextMenuItem(
+                            icon = Icons.Rounded.PushPin,
+                            title = if (isPinned) "Відкріпити" else "Закріпити",
+                            tint = Color.White,
+                            onClick = {
+                                val willUnpin = isPinned
+                                pinnedMessage = if (willUnpin) null else targetMsg
+                                scope.launch {
+                                    YumigramBridge.pinMessage(chat.id, targetMsg.id, unpin = willUnpin)
+                                }
+                                Toast.makeText(
+                                    context,
+                                    if (willUnpin) "Відкріплено" else "Закріплено",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                                selectedMessageForMenu = null
+                            }
+                        )
+                        ContextMenuItem(
+                            icon = Icons.Rounded.ContentCopy,
+                            title = "Копіювати текст",
+                            tint = Color.White,
+                            onClick = {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                val clip = ClipData.newPlainText("Message Text", targetMsg.text.ifBlank { targetMsg.media_type ?: "" })
+                                clipboard.setPrimaryClip(clip)
+                                Toast.makeText(context, "Текст скопійовано", Toast.LENGTH_SHORT).show()
+                                selectedMessageForMenu = null
+                            }
+                        )
+                        ContextMenuItem(
+                            icon = Icons.Rounded.Delete,
+                            title = "Видалити",
+                            tint = Color(0xFFFF5252),
+                            isDestructive = true,
+                            onClick = {
+                                scope.launch {
+                                    YumigramBridge.nativeMarkDeleted(chat.id, targetMsg.id)
+                                }
+                                Toast.makeText(context, "Повідомлення видалено", Toast.LENGTH_SHORT).show()
+                                selectedMessageForMenu = null
+                            }
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Bottom: Row of quick micro-icons
+                Surface(
+                    shape = CircleShape,
+                    color = Color(0xFF1E1E24).copy(alpha = 0.96f),
+                    border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.12f)),
+                    shadowElevation = 8.dp
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(
+                            onClick = {
+                                replyingTo = targetMsg
+                                selectedMessageForMenu = null
+                            },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.Reply,
+                                contentDescription = "Відповісти",
+                                tint = Color(0xFFA855F7),
+                                modifier = Modifier.size(18.dp)
+                            )
                         }
-                )
+                        IconButton(
+                            onClick = {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                val clip = ClipData.newPlainText("Message Text", targetMsg.text.ifBlank { targetMsg.media_type ?: "" })
+                                clipboard.setPrimaryClip(clip)
+                                selectedMessageForMenu = null
+                            },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.ContentCopy,
+                                contentDescription = "Копіювати",
+                                tint = Color.White.copy(alpha = 0.8f),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        IconButton(
+                            onClick = {
+                                messageToForward = targetMsg
+                                selectedMessageForMenu = null
+                            },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                                contentDescription = "Переслати",
+                                tint = Color.White.copy(alpha = 0.8f),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        IconButton(
+                            onClick = {
+                                scope.launch {
+                                    YumigramBridge.nativeMarkDeleted(chat.id, targetMsg.id)
+                                }
+                                selectedMessageForMenu = null
+                            },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Delete,
+                                contentDescription = "Видалити",
+                                tint = Color(0xFFFF5252),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -1054,7 +1100,7 @@ fun ChatScreen(
         )
     }
 
-    // Round Video Note Camera Dialog (Кружечки)
+    // Round Video Note Camera Dialog
     if (showRecordVideoNote) {
         RoundVideoRecordDialog(
             onDismiss = { showRecordVideoNote = false },
@@ -1087,7 +1133,38 @@ fun ChatScreen(
     }
 }
 
-// 2. Custom Layout: Inline Text with Embedded Timestamp & Read Indicators
+@Composable
+private fun ContextMenuItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    tint: Color = Color.White,
+    isDestructive: Boolean = false,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = title,
+            tint = tint,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(modifier = Modifier.width(14.dp))
+        Text(
+            text = title,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            color = if (isDestructive) Color(0xFFFF5252) else Color.White
+        )
+    }
+}
+
+// Custom Layout: Inline Text with Embedded Timestamp & Read Indicators
 @Composable
 fun InlineMessageTextWithTime(
     text: String,
@@ -1188,7 +1265,6 @@ fun MessageBubbleItem(
     var localMediaPath by remember(message.media_path) { mutableStateOf(message.media_path) }
     var selectedReaction by remember { mutableStateOf<String?>(null) }
 
-    // 2. Spring Physics Swipe-To-Reply Animatable
     val dragOffsetAnim = remember { Animatable(0f) }
     val haptic = LocalHapticFeedback.current
     val density = LocalDensity.current
@@ -1203,7 +1279,6 @@ fun MessageBubbleItem(
         label = "replyScale"
     )
 
-    // Download media if needed
     LaunchedEffect(message.id, message.media_path, message.media_type) {
         if (localMediaPath.isNullOrEmpty() && message.media_type != null) {
             try {
@@ -1260,26 +1335,23 @@ fun MessageBubbleItem(
         message.reply_to_id?.let { rId -> messages.firstOrNull { it.id == rId } }
     }
 
-    // Tonal Colors for Bubbles
+    // 3. Cyberpunk Glass Chat Colors
+    // Outgoing: noble violet Color(0xFF9333EA)
+    // Incoming: smoky dark graphite Color(0xFF18181C).copy(alpha = 0.88f)
     val bubbleColor = if (hasCustomWallpaper) {
         if (message.is_outgoing) wallpaper.bubbleOutgoing else wallpaper.bubbleIncoming
     } else {
-        if (message.is_outgoing) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh
+        if (message.is_outgoing) Color(0xFF9333EA) else Color(0xFF18181C).copy(alpha = 0.90f)
     }
 
-    val textColor = if (hasCustomWallpaper) {
-        Color.White
+    val textColor = Color.White
+
+    val metaColor = if (message.is_outgoing) {
+        Color.White.copy(alpha = 0.75f)
     } else {
-        if (message.is_outgoing) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+        Color.White.copy(alpha = 0.55f)
     }
 
-    val metaColor = if (hasCustomWallpaper) {
-        Color.White.copy(alpha = 0.7f)
-    } else {
-        if (message.is_outgoing) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
-    }
-
-    // Dynamic Corner Geometry based on MessageSequence
     val bubbleShape = remember(message.is_outgoing, sequence) {
         getBubbleShape(message.is_outgoing, sequence)
     }
@@ -1352,33 +1424,28 @@ fun MessageBubbleItem(
                         .clip(CircleShape)
                         .background(
                             if (dragOffsetAnim.value >= thresholdPx)
-                                MaterialTheme.colorScheme.primary
+                                Color(0xFF9333EA)
                             else
-                                MaterialTheme.colorScheme.surfaceContainerHighest
+                                Color(0xFF22222C)
                         ),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Rounded.Reply,
                         contentDescription = "Відповісти",
-                        tint = if (dragOffsetAnim.value >= thresholdPx)
-                            MaterialTheme.colorScheme.onPrimary
-                        else
-                            MaterialTheme.colorScheme.primary,
+                        tint = Color.White,
                         modifier = Modifier.size(18.dp)
                     )
                 }
             }
 
             if (isRoundVideo) {
-                // Telegram Video Circle (Кружечки) rendered WITHOUT rectangular bubble
                 VideoNoteBubble(
                     mediaPath = localMediaPath,
                     durationSeconds = message.duration ?: 15,
                     isOutgoing = message.is_outgoing
                 )
             } else if (isSticker) {
-                // Telegram Stickers rendered WITHOUT colored bubble background
                 Column(
                     modifier = Modifier
                         .widthIn(max = 200.dp)
@@ -1427,7 +1494,7 @@ fun MessageBubbleItem(
                             } else {
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(32.dp),
-                                    color = MaterialTheme.colorScheme.primary,
+                                    color = Color(0xFFA855F7),
                                     strokeWidth = 3.dp
                                 )
                             }
@@ -1437,7 +1504,7 @@ fun MessageBubbleItem(
                     // Floating timestamp pill over transparent sticker
                     Surface(
                         shape = CircleShape,
-                        color = Color.Black.copy(alpha = 0.5f),
+                        color = Color.Black.copy(alpha = 0.6f),
                         modifier = Modifier
                             .align(Alignment.End)
                             .padding(top = 4.dp, end = 4.dp)
@@ -1470,23 +1537,23 @@ fun MessageBubbleItem(
 
                             if (message.is_outgoing) {
                                 Spacer(modifier = Modifier.width(3.dp))
-                                val indicator = if (message.is_read) indicatorStyle.read else indicatorStyle.sent
                                 Text(
-                                    text = indicator,
+                                    text = if (message.is_read) "✔✔" else "✔",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF64B5F6)
+                                    color = Color.White
                                 )
                             }
                         }
                     }
                 }
             } else {
-                // Regular Smart Message Bubble with Dynamic Rounded Corners
+                // Regular Cyberpunk Glass Bubble
                 Surface(
                     shape = bubbleShape,
                     color = bubbleColor,
-                    shadowElevation = 1.dp,
+                    border = if (!message.is_outgoing) BorderStroke(0.5.dp, Color.White.copy(alpha = 0.08f)) else null,
+                    shadowElevation = 2.dp,
                     modifier = Modifier
                         .widthIn(max = 310.dp)
                         .clip(bubbleShape)
@@ -1507,7 +1574,7 @@ fun MessageBubbleItem(
                             )
                         }
 
-                        // Quoted message inside bubble if reply_to_id is present
+                        // Quoted message inside bubble if reply_to_id is present (with thumbnail!)
                         if (message.reply_to_id != null) {
                             ReplyQuoteBadge(
                                 replyToMessage = repliedMessage,
@@ -1518,24 +1585,32 @@ fun MessageBubbleItem(
                             )
                         }
 
-                        // Anti-delete notification
+                        // Anti-delete notification badge
                         if (message.is_deleted) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Delete,
-                                    contentDescription = "Видалено",
-                                    tint = DeletedRed,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "[Видалено співрозмовником]",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = DeletedRed
-                                )
+                            Surface(
+                                shape = CircleShape,
+                                color = Color(0xFFFF5252).copy(alpha = 0.15f),
+                                modifier = Modifier.padding(bottom = 4.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Delete,
+                                        contentDescription = "Видалено",
+                                        tint = Color(0xFFFF5252),
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                    Text(
+                                        text = "Видалено співрозмовником",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFFF5252)
+                                    )
+                                }
                             }
-                            Spacer(modifier = Modifier.height(2.dp))
                         }
 
                         // Anti-edit previous version preview
@@ -1583,7 +1658,7 @@ fun MessageBubbleItem(
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                         CircularProgressIndicator(
                                             modifier = Modifier.size(28.dp),
-                                            color = MaterialTheme.colorScheme.primary,
+                                            color = Color(0xFFA855F7),
                                             strokeWidth = 3.dp
                                         )
                                         Spacer(modifier = Modifier.height(8.dp))
@@ -1692,10 +1767,19 @@ fun MessageBubbleItem(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier.padding(start = 6.dp)
                             ) {
+                                // Anti-Delete label beside time if deleted
+                                if (message.is_deleted) {
+                                    Text(
+                                        text = "🗑️ ",
+                                        fontSize = 10.sp,
+                                        color = Color(0xFFFF5252)
+                                    )
+                                }
+
                                 Text(
                                     text = formattedTime,
                                     fontSize = 11.sp,
-                                    color = metaColor
+                                    color = if (message.is_deleted) Color(0xFFFF5252) else metaColor
                                 )
 
                                 if (isChannel) {
@@ -1716,18 +1800,17 @@ fun MessageBubbleItem(
 
                                 if (message.is_outgoing) {
                                     Spacer(modifier = Modifier.width(4.dp))
-                                    val indicator = if (message.is_read) indicatorStyle.read else indicatorStyle.sent
                                     Text(
-                                        text = indicator,
+                                        text = if (message.is_read) "✔✔" else "✔",
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = if (hasCustomWallpaper) Color(0xFF64B5F6) else MaterialTheme.colorScheme.primary
+                                        color = Color.White
                                     )
                                 }
                             }
                         }
 
-                        // 2. Inline Timestamp Layout: Embedded in the last line if there's space
+                        // Inline Timestamp Layout: Embedded in the last line if there's space
                         val isRichSpecial = message.media_type in listOf("voice", "audio", "video") || isPoll || isLocation || isContact
                         if (!isRichSpecial && message.text.isNotBlank()) {
                             InlineMessageTextWithTime(
@@ -1737,7 +1820,6 @@ fun MessageBubbleItem(
                                 timeContent = timeRow
                             )
                         } else {
-                            // Pure media or special card: time row aligned to end
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -1756,7 +1838,7 @@ fun MessageBubbleItem(
         if (selectedReaction != null) {
             Surface(
                 shape = CircleShape,
-                color = MaterialTheme.colorScheme.primaryContainer,
+                color = Color(0xFF9333EA),
                 shadowElevation = 2.dp,
                 modifier = Modifier
                     .padding(top = 2.dp, start = 6.dp, end = 6.dp)
@@ -1766,7 +1848,7 @@ fun MessageBubbleItem(
                     text = "$selectedReaction 1",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    color = Color.White,
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                 )
             }

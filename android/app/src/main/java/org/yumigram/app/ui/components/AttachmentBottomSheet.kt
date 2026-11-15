@@ -105,7 +105,7 @@ fun AttachmentBottomSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        containerColor = Color(0xFF18181F),
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
     ) {
         Column(
@@ -118,6 +118,7 @@ fun AttachmentBottomSheet(
                 text = "Надіслати вкладення",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
+                color = Color.White,
                 modifier = Modifier.padding(bottom = 16.dp, start = 8.dp)
             )
 
@@ -157,6 +158,7 @@ fun AttachmentBottomSheet(
                             text = action.title,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium,
+                            color = Color.White.copy(alpha = 0.9f),
                             textAlign = TextAlign.Center,
                             maxLines = 1
                         )

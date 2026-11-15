@@ -8,12 +8,22 @@ val PixelBlueOnPrimary = Color(0xFF003062)
 val PixelBlueContainer = Color(0xFF00468C)
 val PixelBlueOnContainer = Color(0xFFD6E3FF)
 
+// Amegram / exteraGram Cyberpunk Glass Palette
+val AmegramPurplePrimary = Color(0xFF9333EA)
+val AmegramPurpleLight = Color(0xFFA855F7)
+val AmegramGlassDark = Color(0xFF1E1E24)
+val AmegramGlassStroke = Color(0x1AFFFFFF) // 0.1f alpha white
+val AmegramIncomingBubble = Color(0xFF18181C)
+val AmegramOutgoingBubble = Color(0xFF9333EA)
+val AmegramQuotePink = Color(0xFFEC4899)
+val AmegramQuoteViolet = Color(0xFFA855F7)
+
 // Pixel Dark Monet Palette (Tonal Elevation layers)
-val PixelDarkSurfaceLowest = Color(0xFF0E1014)
-val PixelDarkSurfaceLow = Color(0xFF14171D)
-val PixelDarkSurface = Color(0xFF1A1D24)
-val PixelDarkSurfaceHigh = Color(0xFF232730)
-val PixelDarkSurfaceHighest = Color(0xFF2E323D)
+val PixelDarkSurfaceLowest = Color(0xFF0A0A0D)
+val PixelDarkSurfaceLow = Color(0xFF131317)
+val PixelDarkSurface = Color(0xFF1A1A20)
+val PixelDarkSurfaceHigh = Color(0xFF22222A)
+val PixelDarkSurfaceHighest = Color(0xFF2C2C36)
 val PixelDarkOnSurface = Color(0xFFE2E2E9)
 val PixelDarkOnSurfaceVariant = Color(0xFFC4C6D0)
 val PixelDarkOutline = Color(0xFF8E9099)
@@ -21,10 +31,10 @@ val PixelDarkOutlineVariant = Color(0xFF44474E)
 
 // True AMOLED Pure Black Palette (#000000)
 val AmoledSurfaceLowest = Color(0xFF000000)
-val AmoledSurfaceLow = Color(0xFF0B0C0F)
+val AmoledSurfaceLow = Color(0xFF09090C)
 val AmoledSurface = Color(0xFF000000)
-val AmoledSurfaceHigh = Color(0xFF16181E)
-val AmoledSurfaceHighest = Color(0xFF22242C)
+val AmoledSurfaceHigh = Color(0xFF14141A)
+val AmoledSurfaceHighest = Color(0xFF1E1E26)
 val AmoledOnSurface = Color(0xFFE8E8EE)
 val AmoledOnSurfaceVariant = Color(0xFFC4C6D0)
 
@@ -45,9 +55,9 @@ val PixelLightSurfaceVariant = PixelLightSurfaceHighest
 val PixelDarkSurfaceVariant = PixelDarkSurfaceHigh
 
 // Chat bubble accents
-val OutgoingBubbleColor = Color(0xFF2B5278)
-val IncomingBubbleColor = Color(0xFF1E232A)
-val ReadIndicatorBlue = Color(0xFF4FA3FF)
+val OutgoingBubbleColor = Color(0xFF9333EA)
+val IncomingBubbleColor = Color(0xFF18181C)
+val ReadIndicatorBlue = Color(0xFFFFFFFF)
 val DeletedRed = Color(0xFFFF5252)
 
 // Generative Pastel Monet Avatar Palettes (Mint, Coral, Lavender, Powder, Ocean, Amber, Sage, Sky)

@@ -2,6 +2,7 @@ package org.yumigram.app.ui.screens.chats
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -39,7 +40,7 @@ import java.util.Date
 import java.util.Locale
 
 enum class ChatFilter(val title: String) {
-    ALL("Всі"),
+    ALL("Усі чати"),
     PERSONAL("Особисті"),
     GROUPS("Групи"),
     CHANNELS("Канали"),
@@ -77,7 +78,11 @@ fun ChatListScreen(
         }
         when (selectedFilter) {
             ChatFilter.ALL -> list
-            ChatFilter.PERSONAL -> list.filter { it.chat_type == "user" || it.chat_type == "dialog" }
+            ChatFilter.PERSONAL -> list.filter {
+                (it.chat_type == "user" || it.chat_type == "dialog") &&
+                        (it.username?.endsWith("bot", ignoreCase = true) != true) &&
+                        it.chat_type != "bot"
+            }
             ChatFilter.GROUPS -> list.filter { it.chat_type == "group" || it.chat_type == "supergroup" }
             ChatFilter.CHANNELS -> list.filter { it.chat_type == "channel" }
             ChatFilter.BOTS -> list.filter { it.chat_type == "bot" || it.username?.endsWith("bot", ignoreCase = true) == true }
@@ -86,12 +91,12 @@ fun ChatListScreen(
     }
 
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+        containerColor = Color(0xFF0C0C10),
         topBar = {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surfaceContainerLowest)
+                    .background(Color(0xFF0C0C10))
                     .statusBarsPadding()
                     .padding(horizontal = 16.dp, vertical = 6.dp)
             ) {
@@ -105,7 +110,7 @@ fun ChatListScreen(
                         text = "Повідомлення",
                         style = MaterialTheme.typography.headlineMedium.copy(
                             fontWeight = FontWeight.ExtraBold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = Color.White
                         )
                     )
 
@@ -114,18 +119,18 @@ fun ChatListScreen(
                         FilledTonalIconButton(
                             onClick = onRefresh,
                             enabled = !isRefreshing,
-                            modifier = Modifier.size(40.dp),
+                            modifier = Modifier.size(38.dp),
                             shape = CircleShape,
                             colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                                contentColor = MaterialTheme.colorScheme.primary
+                                containerColor = Color(0xFF1E1E26),
+                                contentColor = Color(0xFFA855F7)
                             )
                         ) {
                             if (isRefreshing) {
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(18.dp),
                                     strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.primary
+                                    color = Color(0xFFA855F7)
                                 )
                             } else {
                                 Icon(
@@ -138,10 +143,11 @@ fun ChatListScreen(
 
                         Spacer(modifier = Modifier.width(6.dp))
 
-                        // Ghost Mode Badge (Material 3 Expressive pill)
+                        // Ghost Mode Badge (Amegram purple pill)
                         Surface(
                             shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primaryContainer,
+                            color = Color(0xFF9333EA).copy(alpha = 0.25f),
+                            border = BorderStroke(0.5.dp, Color(0xFFA855F7).copy(alpha = 0.5f)),
                             modifier = Modifier.height(32.dp)
                         ) {
                             Row(
@@ -152,29 +158,30 @@ fun ChatListScreen(
                                     imageVector = Icons.Rounded.Shield,
                                     contentDescription = "Ghost Mode",
                                     modifier = Modifier.size(14.dp),
-                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                    tint = Color(0xFFA855F7)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
                                     text = "Ghost",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    color = Color.White
                                 )
                             }
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
-                // Flagship The Pill Search Bar (Material 3 Expressive, shape = CircleShape, height = 52.dp)
+                // The Pill Search Bar (Amegram dark acrylic glass, CircleShape)
                 Surface(
                     shape = CircleShape,
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    color = Color(0xFF18181F),
+                    border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.08f)),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(52.dp)
+                        .height(48.dp)
                 ) {
                     Row(
                         modifier = Modifier
@@ -185,10 +192,10 @@ fun ChatListScreen(
                         Icon(
                             imageVector = Icons.Rounded.Search,
                             contentDescription = "Пошук",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(22.dp)
+                            tint = Color.White.copy(alpha = 0.5f),
+                            modifier = Modifier.size(20.dp)
                         )
-                        Spacer(modifier = Modifier.width(12.dp))
+                        Spacer(modifier = Modifier.width(10.dp))
                         TextField(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
@@ -196,7 +203,7 @@ fun ChatListScreen(
                                 Text(
                                     text = "Пошук чатів або повідомлень...",
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                    color = Color.White.copy(alpha = 0.45f)
                                 )
                             },
                             singleLine = true,
@@ -205,27 +212,27 @@ fun ChatListScreen(
                                 unfocusedContainerColor = Color.Transparent,
                                 focusedIndicatorColor = Color.Transparent,
                                 unfocusedIndicatorColor = Color.Transparent,
-                                cursorColor = MaterialTheme.colorScheme.primary,
-                                focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                                unfocusedTextColor = MaterialTheme.colorScheme.onSurface
+                                cursorColor = Color(0xFFA855F7),
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White
                             ),
                             modifier = Modifier.weight(1f)
                         )
 
                         AnimatedVisibility(
                             visible = searchQuery.isNotEmpty(),
-                            enter = fadeIn() + scaleIn(spring(dampingRatio = Spring.DampingRatioMediumBouncy)),
+                            enter = fadeIn() + scaleIn(),
                             exit = fadeOut() + scaleOut()
                         ) {
                             IconButton(
                                 onClick = { searchQuery = "" },
-                                modifier = Modifier.size(32.dp)
+                                modifier = Modifier.size(28.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Rounded.Close,
                                     contentDescription = "Очистити",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(18.dp)
+                                    tint = Color.White.copy(alpha = 0.6f),
+                                    modifier = Modifier.size(16.dp)
                                 )
                             }
                         }
@@ -234,7 +241,7 @@ fun ChatListScreen(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Expressive Filter Chips Row (No scrollbars, smooth pill layout)
+                // 2. Chat Folders / Tabs: Elegant dark capsules (Zero toxic orange!)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -243,25 +250,29 @@ fun ChatListScreen(
                 ) {
                     ChatFilter.values().forEach { filter ->
                         val isSelected = selectedFilter == filter
-                        FilterChip(
-                            selected = isSelected,
-                            onClick = { selectedFilter = filter },
-                            label = {
+                        Surface(
+                            shape = CircleShape,
+                            color = if (isSelected) Color(0xFF9333EA) else Color(0xFF18181F),
+                            border = BorderStroke(
+                                0.5.dp,
+                                if (isSelected) Color(0xFFA855F7) else Color.White.copy(alpha = 0.08f)
+                            ),
+                            modifier = Modifier
+                                .height(34.dp)
+                                .clickable { selectedFilter = filter }
+                        ) {
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier.padding(horizontal = 14.dp)
+                            ) {
                                 Text(
                                     text = filter.title,
-                                    fontSize = 13.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                    fontSize = 12.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isSelected) Color.White else Color.White.copy(alpha = 0.65f)
                                 )
-                            },
-                            shape = CircleShape,
-                            colors = FilterChipDefaults.filterChipColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                                labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-                            ),
-                            border = null
-                        )
+                            }
+                        }
                     }
                 }
             }
@@ -277,40 +288,40 @@ fun ChatListScreen(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Surface(
                         shape = CircleShape,
-                        color = MaterialTheme.colorScheme.surfaceContainerLow,
-                        modifier = Modifier.size(80.dp)
+                        color = Color(0xFF18181F),
+                        modifier = Modifier.size(76.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = Icons.Rounded.ChatBubbleOutline,
                                 contentDescription = null,
-                                modifier = Modifier.size(38.dp),
-                                tint = MaterialTheme.colorScheme.primary
+                                modifier = Modifier.size(36.dp),
+                                tint = Color(0xFFA855F7)
                             )
                         }
                     }
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
                     Text(
                         text = if (searchQuery.isNotBlank()) "Нічого не знайдено" else "Немає активних чатів",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = Color.White
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
                         text = "Оновіть або почніть нову бесіду",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = Color.White.copy(alpha = 0.5f)
                     )
                 }
             }
         } else {
-            // Tonal surface separation instead of hard Dividers
+            // Amegram dark graphite cards with bottom padding for Floating Island NavBar
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 96.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 if (selectedFilter == ChatFilter.ALL && searchQuery.isBlank()) {
@@ -388,8 +399,14 @@ fun ChatCardItem(
         }
     }
 
-    // Pulsating online indicator animation
-    val isUserChat = chat.chat_type == "user" || chat.chat_type == "dialog"
+    // STRICT ONLINE CHECK: Only real direct users (NOT channels, NOT groups, NOT bots)
+    val isBot = chat.chat_type == "bot" || chat.username?.endsWith("bot", ignoreCase = true) == true
+    val isChannelOrGroup = chat.chat_type == "channel" || chat.chat_type == "group" || chat.chat_type == "supergroup"
+    val isRealDirectUser = (chat.chat_type == "user" || chat.chat_type == "dialog") && !isBot && !isChannelOrGroup
+
+    // Pulsating online indicator animation ONLY for real direct users
+    val isUserOnline = isRealDirectUser && (chat.last_message_date > 0 && (System.currentTimeMillis() / 1000 - chat.last_message_date) < 600)
+
     val infiniteTransition = rememberInfiniteTransition(label = "online_pulse")
     val pulseScale by infiniteTransition.animateFloat(
         initialValue = 0.95f,
@@ -410,10 +427,11 @@ fun ChatCardItem(
         label = "pulseAlpha"
     )
 
-    // Tonal surface card (surfaceContainerLow, 20.dp rounded shape)
+    // Amegram dark glass card
     Surface(
         shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        color = Color(0xFF16161C),
+        border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.05f)),
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
@@ -425,7 +443,7 @@ fun ChatCardItem(
                 .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Avatar Box with optional Pulsating Online Indicator
+            // Avatar Box with STRICT real-user online indicator
             Box(
                 modifier = Modifier.size(54.dp),
                 contentAlignment = Alignment.Center
@@ -440,7 +458,7 @@ fun ChatCardItem(
                             .clip(CircleShape)
                     )
                 } else {
-                    // Generative Pastel Monet Avatar
+                    // Generative Pastel Monet Avatar with Crisp White Letter
                     val monetPalette = remember(chat.id) { getMonetAvatarPalette(chat.id) }
                     val initial = chat.title.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
 
@@ -453,21 +471,20 @@ fun ChatCardItem(
                     ) {
                         Text(
                             text = initial,
-                            color = monetPalette.onColor,
+                            color = Color.White,
                             fontSize = 22.sp,
                             fontWeight = FontWeight.ExtraBold
                         )
                     }
                 }
 
-                // Pulsating Online Indicator for direct user chats
-                if (isUserChat) {
+                // Green dot appears ONLY for verified real direct users! CATEGORICALLY absent on channels/groups/bots!
+                if (isUserOnline) {
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .offset(x = 1.dp, y = 1.dp)
                     ) {
-                        // Soft pulsing halo
                         Box(
                             modifier = Modifier
                                 .size(14.dp)
@@ -475,12 +492,11 @@ fun ChatCardItem(
                                 .clip(CircleShape)
                                 .background(Color(0xFF00E676).copy(alpha = 0.35f * pulseAlpha))
                         )
-                        // Solid green dot with 2.dp border matching card background
                         Box(
                             modifier = Modifier
                                 .size(12.dp)
                                 .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                                .background(Color(0xFF16161C))
                                 .padding(2.dp)
                                 .clip(CircleShape)
                                 .background(Color(0xFF00E676))
@@ -498,15 +514,29 @@ fun ChatCardItem(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = chat.title,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        color = MaterialTheme.colorScheme.onSurface,
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.weight(1f, fill = false)
-                    )
+                    ) {
+                        Text(
+                            text = chat.title,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            color = Color.White
+                        )
+                        // Muted / Notification Off icon
+                        if (chat.chat_type == "channel") {
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(
+                                imageVector = Icons.Rounded.NotificationsOff,
+                                contentDescription = "Без звуку",
+                                tint = Color.White.copy(alpha = 0.35f),
+                                modifier = Modifier.size(13.dp)
+                            )
+                        }
+                    }
 
                     // Date/Time
                     val formattedTime = remember(chat.last_message_date) {
@@ -520,9 +550,9 @@ fun ChatCardItem(
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = formattedTime,
-                            fontSize = 12.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = Color.White.copy(alpha = 0.45f)
                         )
                     }
                 }
@@ -540,26 +570,26 @@ fun ChatCardItem(
                             text = "$indicator ",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
+                            color = Color(0xFFA855F7)
                         )
                     }
 
                     Text(
                         text = chat.last_message_text ?: "Немає повідомлень",
-                        fontSize = 14.sp,
+                        fontSize = 13.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = Color.White.copy(alpha = 0.6f),
                         modifier = Modifier.weight(1f)
                     )
 
-                    // Unread Count Badge in Pixel MD3 Pill Style
+                    // Sleek Unread Count Badge (Amegram purple pill)
                     if (chat.unread_count > 0) {
                         Spacer(modifier = Modifier.width(8.dp))
                         Surface(
                             shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.sizeIn(minWidth = 22.dp, minHeight = 22.dp)
+                            color = Color(0xFF9333EA),
+                            modifier = Modifier.sizeIn(minWidth = 20.dp, minHeight = 20.dp)
                         ) {
                             Box(
                                 contentAlignment = Alignment.Center,
@@ -567,7 +597,7 @@ fun ChatCardItem(
                             ) {
                                 Text(
                                     text = "${chat.unread_count}",
-                                    color = MaterialTheme.colorScheme.onPrimary,
+                                    color = Color.White,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.ExtraBold
                                 )
@@ -584,7 +614,8 @@ fun ChatCardItem(
 fun SavedMessagesCard(onClick: () -> Unit) {
     Surface(
         shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        color = Color(0xFF16161C),
+        border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.05f)),
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
@@ -602,7 +633,7 @@ fun SavedMessagesCard(onClick: () -> Unit) {
                     .clip(CircleShape)
                     .background(
                         Brush.linearGradient(
-                            listOf(Color(0xFF2979FF), Color(0xFF00B0FF))
+                            listOf(Color(0xFF9333EA), Color(0xFFA855F7))
                         )
                     ),
                 contentAlignment = Alignment.Center
@@ -618,17 +649,17 @@ fun SavedMessagesCard(onClick: () -> Unit) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "Збережене",
-                    fontSize = 16.sp,
+                    fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = Color.White
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = "Хмарне сховище для ваших заміток та медіа",
-                    fontSize = 13.sp,
+                    fontSize = 12.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = Color.White.copy(alpha = 0.55f)
                 )
             }
         }
