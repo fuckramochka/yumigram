@@ -666,16 +666,18 @@ fun ChatScreen(
 
                                 Spacer(modifier = Modifier.width(6.dp))
 
+                                val sendRotate by animateFloatAsState(
+                                    targetValue = if (inputText.isNotBlank()) 0f else -45f,
+                                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+                                    label = "sendRotate"
+                                )
+
                                 // Morphing Action Button (Mic ⟷ Send) with Spring Physics
                                 AnimatedContent(
                                     targetState = inputText.isNotBlank(),
                                     transitionSpec = {
-                                        (scaleIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)) +
-                                                fadeIn() +
-                                                rotateIn(initialAngle = -45f))
-                                            .togetherWith(
-                                                scaleOut() + fadeOut() + rotateOut(targetAngle = 45f)
-                                            )
+                                        (scaleIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)) + fadeIn())
+                                            .togetherWith(scaleOut() + fadeOut())
                                     },
                                     label = "ActionMorph"
                                 ) { hasText ->
@@ -685,7 +687,9 @@ fun ChatScreen(
                                                 dispatchMessage(inputText)
                                                 inputText = ""
                                             },
-                                            modifier = Modifier.size(48.dp),
+                                            modifier = Modifier
+                                                .size(48.dp)
+                                                .graphicsLayer { rotationZ = sendRotate },
                                             shape = CircleShape,
                                             colors = IconButtonDefaults.filledIconButtonColors(
                                                 containerColor = MaterialTheme.colorScheme.primary,
