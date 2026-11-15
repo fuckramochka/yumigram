@@ -2,7 +2,7 @@ use grammers_client::client::SignInError;
 use grammers_client::update::Update;
 use grammers_client::Client;
 use grammers_mtsender::SenderPool;
-use grammers_session::storages::SqliteSession;
+use yumigram_core::session::FileSession;
 use std::env;
 use std::io::{self, BufRead, Write};
 use std::sync::Arc;
@@ -37,7 +37,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     println!("\n[1/3] Підключення до серверів Telegram (MTProto 2.0)...");
     let session_file = "yumigram_test.session";
-    let session = Arc::new(SqliteSession::open(session_file).await?);
+    let session = Arc::new(FileSession::load_or_create(session_file));
     let pool = SenderPool::new(session, api_id);
     let updates_rx = pool.updates;
     let client = Client::new(pool.handle);

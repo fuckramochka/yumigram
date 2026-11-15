@@ -359,3 +359,36 @@ async fn test_agent_executor_full_capabilities() {
     assert_eq!(db.get_setting("profile_first_name").unwrap(), Some("Yumi".into()));
     assert_eq!(db.get_setting("profile_bio").unwrap(), Some("Building Yumigram with AI and Pixel OS Material Design".into()));
 }
+
+#[tokio::test]
+async fn test_telegram_manager_connect_lifecycle() {
+    use yumigram_core::client::TelegramManager;
+    let test_session = "test_tg_lifecycle.session";
+    let _ = std::fs::remove_file(test_session);
+
+    // 1st run: file does not exist
+    {
+        let tg = TelegramManager::new(test_session.to_string());
+        let connect_res = tg.connect().await;
+        println!("1st Connect result: {:?}", connect_res);
+        assert!(connect_res.is_ok());
+
+        let is_auth = tg.is_authorized().await;
+        println!("1st Is authorized: {:?}", is_auth);
+        assert!(!is_auth);
+    }
+
+    // 2nd run: file ALREADY EXISTS!
+    {
+        let tg2 = TelegramManager::new(test_session.to_string());
+        let connect_res2 = tg2.connect().await;
+        println!("2nd Connect result: {:?}", connect_res2);
+        assert!(connect_res2.is_ok());
+
+        let is_auth2 = tg2.is_authorized().await;
+        println!("2nd Is authorized: {:?}", is_auth2);
+        assert!(!is_auth2);
+    }
+
+    let _ = std::fs::remove_file(test_session);
+}

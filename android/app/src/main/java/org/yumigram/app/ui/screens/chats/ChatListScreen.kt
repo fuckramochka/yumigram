@@ -215,7 +215,9 @@ fun ChatItemRow(
     LaunchedEffect(chat.id) {
         if (avatarPath.isNullOrEmpty()) {
             try {
-                val target = "${context.cacheDir.absolutePath}/avatars/chat_${chat.id}.jpg"
+                val avatarsDir = java.io.File(context.cacheDir, "avatars")
+                if (!avatarsDir.exists()) avatarsDir.mkdirs()
+                val target = "${avatarsDir.absolutePath}/chat_${chat.id}.jpg"
                 val downloaded = YumigramBridge.downloadChatAvatar(chat.id, target)
                 if (downloaded.isNotEmpty()) {
                     avatarPath = downloaded

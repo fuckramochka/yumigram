@@ -46,6 +46,29 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x android/gradlew
 
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Build Native Rust Library (libyumigram_core.so)
+        run: |
+          export ANDROID_NDK_HOME=$(ls -d /usr/local/lib/android/sdk/ndk/* 2>/dev/null | tail -n 1)
+          if [ -z "$ANDROID_NDK_HOME" ] || [ ! -d "$ANDROID_NDK_HOME" ]; then
+            echo "Installing NDK via sdkmanager..."
+            yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --install "ndk;27.2.12479018" || true
+            export ANDROID_NDK_HOME=$(ls -d /usr/local/lib/android/sdk/ndk/* | tail -n 1)
+          fi
+          echo "Using Android NDK at: $ANDROID_NDK_HOME"
+          export PATH=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
+          export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=aarch64-linux-android35-clang
+          export CC_aarch64_unknown_linux_android=aarch64-linux-android35-clang
+          export CXX_aarch64_unknown_linux_android=aarch64-linux-android35-clang++
+          cargo build --manifest-path core/Cargo.toml --target aarch64-linux-android --release
+          mkdir -p android/app/src/main/jniLibs/arm64-v8a
+          cp core/target/aarch64-linux-android/release/libyumigram_core.so android/app/src/main/jniLibs/arm64-v8a/libyumigram_core.so
+          ls -lh android/app/src/main/jniLibs/arm64-v8a/libyumigram_core.so
+
       - name: Build Signed Release and Debug APKs
         run: |
           cd android

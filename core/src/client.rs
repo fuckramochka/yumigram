@@ -1,7 +1,7 @@
 use grammers_client::client::{LoginToken, PasswordToken, SignInError};
 use grammers_client::Client;
 use grammers_mtsender::{SenderPool, UpdatesConfiguration};
-use grammers_session::storages::SqliteSession;
+use crate::session::FileSession;
 use grammers_session::types::PeerRef;
 use grammers_session::updates::UpdatesLike;
 use crate::db::LocalDatabase;
@@ -43,7 +43,7 @@ impl TelegramManager {
     /// Connects to real Telegram MTProto servers using official credentials
     /// and actively drives the MTProto network I/O runner in a background task.
     pub async fn connect(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let session = Arc::new(SqliteSession::open(&self.session_file).await?);
+        let session = Arc::new(FileSession::load_or_create(&self.session_file));
         let SenderPool {
             runner,
             handle,
