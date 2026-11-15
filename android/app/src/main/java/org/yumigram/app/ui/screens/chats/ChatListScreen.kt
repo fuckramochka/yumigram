@@ -38,7 +38,9 @@ enum class ChatFilter(val title: String) {
     ALL("Всі"),
     PERSONAL("Особисті"),
     GROUPS("Групи"),
-    CHANNELS("Канали")
+    CHANNELS("Канали"),
+    BOTS("Боти"),
+    UNREAD("Непрочитані")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -63,8 +65,10 @@ fun ChatListScreen(
         when (selectedFilter) {
             ChatFilter.ALL -> list
             ChatFilter.PERSONAL -> list.filter { it.chat_type == "user" || it.chat_type == "dialog" }
-            ChatFilter.GROUPS -> list.filter { it.chat_type == "group" }
+            ChatFilter.GROUPS -> list.filter { it.chat_type == "group" || it.chat_type == "supergroup" }
             ChatFilter.CHANNELS -> list.filter { it.chat_type == "channel" }
+            ChatFilter.BOTS -> list.filter { it.chat_type == "bot" || it.username?.endsWith("bot", ignoreCase = true) == true }
+            ChatFilter.UNREAD -> list.filter { it.unread_count > 0 }
         }
     }
 
@@ -237,6 +241,32 @@ fun ChatListScreen(
                     .fillMaxSize()
                     .padding(padding)
             ) {
+                if (selectedFilter == ChatFilter.ALL && searchQuery.isBlank()) {
+                    item {
+                        SavedMessagesRow(
+                            onClick = {
+                                val savedChat = chats.find { it.title == "Збережене" || it.title == "Saved Messages" }
+                                    ?: ChatModel(
+                                        id = 0L,
+                                        title = "Збережене",
+                                        username = null,
+                                        chat_type = "user",
+                                        unread_count = 0,
+                                        last_message_text = "Хмарне сховище ваших повідомлень",
+                                        last_message_date = System.currentTimeMillis() / 1000,
+                                        avatar_path = null
+                                    )
+                                onChatClick(savedChat)
+                            }
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(start = 82.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                            thickness = 0.5.dp
+                        )
+                    }
+                }
+
                 items(filteredChats, key = { it.id }) { chat ->
                     ChatItemRow(
                         chat = chat,
@@ -418,6 +448,53 @@ fun ChatItemRow(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun SavedMessagesRow(onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(52.dp)
+                .clip(CircleShape)
+                .background(
+                    Brush.linearGradient(
+                        listOf(Color(0xFF2979FF), Color(0xFF00B0FF))
+                    )
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Bookmark,
+                contentDescription = "Saved Messages",
+                tint = Color.White,
+                modifier = Modifier.size(26.dp)
+            )
+        }
+        Spacer(modifier = Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Збережене",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = "Хмарне сховище для ваших заміток та медіа",
+                fontSize = 13.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
