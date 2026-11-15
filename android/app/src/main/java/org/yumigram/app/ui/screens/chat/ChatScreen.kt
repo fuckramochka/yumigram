@@ -848,6 +848,9 @@ fun MessageBubbleItem(
     val isLocation = message.media_type == "location" || message.text.startsWith("📍")
     val isContact = message.media_type == "contact" || message.text.startsWith("👤 Контакт")
 
+    val chatFontSize by ThemeManager.fontSize.collectAsState()
+    val bubbleRadius by ThemeManager.bubbleCornerRadius.collectAsState()
+
     val formattedTime = remember(message.date) {
         if (message.date > 0) {
             val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
@@ -1029,9 +1032,9 @@ fun MessageBubbleItem(
                 // Regular Message Bubble
                 val bubbleColor = if (message.is_outgoing) wallpaper.bubbleOutgoing else wallpaper.bubbleIncoming
                 val shape = if (message.is_outgoing) {
-                    RoundedCornerShape(18.dp, 18.dp, 4.dp, 18.dp)
+                    RoundedCornerShape(bubbleRadius.dp, bubbleRadius.dp, 4.dp, bubbleRadius.dp)
                 } else {
-                    RoundedCornerShape(18.dp, 18.dp, 18.dp, 4.dp)
+                    RoundedCornerShape(bubbleRadius.dp, bubbleRadius.dp, bubbleRadius.dp, 4.dp)
                 }
 
                 Surface(
@@ -1229,7 +1232,7 @@ fun MessageBubbleItem(
                         if (!isRichSpecial && message.text.isNotBlank()) {
                             Text(
                                 text = message.text,
-                                fontSize = 15.sp,
+                                fontSize = chatFontSize.sp,
                                 color = Color.White
                             )
                             Spacer(modifier = Modifier.height(4.dp))

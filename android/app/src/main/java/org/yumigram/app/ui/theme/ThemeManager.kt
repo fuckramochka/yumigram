@@ -50,6 +50,24 @@ object ThemeManager {
     private val _customWallpaperUri = MutableStateFlow<String?>(null)
     val customWallpaperUri: StateFlow<String?> = _customWallpaperUri
 
+    private val _fontSize = MutableStateFlow(15f)
+    val fontSize: StateFlow<Float> = _fontSize
+
+    private val _nameColorIndex = MutableStateFlow(0)
+    val nameColorIndex: StateFlow<Int> = _nameColorIndex
+
+    private val _inAppBrowserEnabled = MutableStateFlow(true)
+    val inAppBrowserEnabled: StateFlow<Boolean> = _inAppBrowserEnabled
+
+    private val _bubbleCornerRadius = MutableStateFlow(18)
+    val bubbleCornerRadius: StateFlow<Int> = _bubbleCornerRadius
+
+    private val _autoReplyEnabled = MutableStateFlow(false)
+    val autoReplyEnabled: StateFlow<Boolean> = _autoReplyEnabled
+
+    private val _autoReplyMessage = MutableStateFlow("Зараз я не в мережі. Відповім якнайшвидше! (Yumigram Auto-Reply)")
+    val autoReplyMessage: StateFlow<String> = _autoReplyMessage
+
     fun init(context: Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val modeStr = prefs.getString("theme_mode", ThemeMode.SYSTEM.name) ?: ThemeMode.SYSTEM.name
@@ -64,6 +82,12 @@ object ThemeManager {
         _chatWallpaper.value = try { ChatWallpaper.valueOf(wallpaperStr) } catch (_: Exception) { ChatWallpaper.DEFAULT }
 
         _customWallpaperUri.value = prefs.getString("custom_wallpaper_uri", null)
+        _fontSize.value = prefs.getFloat("font_size", 15f)
+        _nameColorIndex.value = prefs.getInt("name_color_index", 0)
+        _inAppBrowserEnabled.value = prefs.getBoolean("in_app_browser", true)
+        _bubbleCornerRadius.value = prefs.getInt("bubble_corner_radius", 18)
+        _autoReplyEnabled.value = prefs.getBoolean("auto_reply_enabled", false)
+        _autoReplyMessage.value = prefs.getString("auto_reply_message", "Зараз я не в мережі. Відповім якнайшвидше! (Yumigram Auto-Reply)") ?: "Зараз я не в мережі."
     }
 
     fun setThemeMode(context: Context, mode: ThemeMode) {
@@ -94,5 +118,41 @@ object ThemeManager {
         _customWallpaperUri.value = uri
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit().putString("custom_wallpaper_uri", uri).apply()
+    }
+
+    fun setFontSize(context: Context, size: Float) {
+        _fontSize.value = size
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putFloat("font_size", size).apply()
+    }
+
+    fun setNameColorIndex(context: Context, index: Int) {
+        _nameColorIndex.value = index
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putInt("name_color_index", index).apply()
+    }
+
+    fun setInAppBrowserEnabled(context: Context, enabled: Boolean) {
+        _inAppBrowserEnabled.value = enabled
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putBoolean("in_app_browser", enabled).apply()
+    }
+
+    fun setBubbleCornerRadius(context: Context, radius: Int) {
+        _bubbleCornerRadius.value = radius
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putInt("bubble_corner_radius", radius).apply()
+    }
+
+    fun setAutoReplyEnabled(context: Context, enabled: Boolean) {
+        _autoReplyEnabled.value = enabled
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putBoolean("auto_reply_enabled", enabled).apply()
+    }
+
+    fun setAutoReplyMessage(context: Context, message: String) {
+        _autoReplyMessage.value = message
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putString("auto_reply_message", message).apply()
     }
 }
