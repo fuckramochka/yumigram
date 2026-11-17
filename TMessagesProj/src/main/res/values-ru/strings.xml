@@ -2,6 +2,30 @@
 <resources>
     <string name="AppName">Юмиграм</string>
     <string name="AppNameBeta">Юмиграм Бета</string>
+    <!-- Yumigram Settings -->
+    <string name="YumiSettings">Настройки Юмиграм</string>
+    <string name="YumiSettingsInfo">Режим призрака, анти-удаление, ИИ и плеер</string>
+    <string name="YumiSectionGhost">Режим призрака</string>
+    <string name="YumiGhostMode">Главный режим невидимки</string>
+    <string name="YumiGhostModeInfo">Включает режим скрытности для всех действий</string>
+    <string name="YumiHideRead">Не отмечать прочитанным</string>
+    <string name="YumiHideReadInfo">Собеседник не узнает, что вы прочитали сообщение</string>
+    <string name="YumiHideTyping">Скрывать статус «печатает…»</string>
+    <string name="YumiHideTypingInfo">Не передавать статус набора текста или записи голоса</string>
+    <string name="YumiHideStoriesSeen">Смотреть истории анонимно</string>
+    <string name="YumiSectionAntiDelete">Анти-удаление</string>
+    <string name="YumiAntiDelete">Сохранять удаленные сообщения</string>
+    <string name="YumiAntiDeleteInfo">Удаленные собеседником сообщения останутся видны с пометкой</string>
+    <string name="YumiSectionAI">ИИ-помощник</string>
+    <string name="YumiAiEnabled">Включить ИИ-помощника</string>
+    <string name="YumiAiEnabledInfo">Суммаризация чатов, умные ответы и перевод</string>
+    <string name="YumiAiApiKey">API-ключ ИИ</string>
+    <string name="YumiSectionPlayer">Медиаплеер</string>
+    <string name="YumiEnhancedPlayer">Продвинутый медиаплеер</string>
+    <string name="YumiEnhancedPlayerInfo">Расширенные скорости воспроизведения и таймер сна</string>
+    <string name="YumiEqualizer">Эквалайзер звука</string>
+    <string name="YumiSectionUI">Интерфейс</string>
+    <string name="YumiHideSponsored">Скрывать рекламу и спонсоров</string>
     <string name="LanguageName">Русский</string>
     <string name="English">Английский</string>
     <string name="LanguageNameInEnglish">Russian</string>

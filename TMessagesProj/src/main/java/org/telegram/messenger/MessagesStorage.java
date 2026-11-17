@@ -406,6 +406,7 @@ public class MessagesStorage extends BaseController {
                 NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.onDatabaseMigration, false);
             }
         });
+        org.telegram.messenger.yumigram.storage.YumiStorage.initDatabase(database);
         loadDialogFilters();
         loadUnreadMessages();
         loadPendingTasks();
@@ -15067,7 +15068,13 @@ public class MessagesStorage extends BaseController {
                         cursor.dispose();
                         cursor = null;
                     }
-                    database.executeFast(String.format(Locale.US, "DELETE FROM messages_v2 WHERE mid IN(%s) AND uid = %d", ids, did)).stepThis().dispose();
+                    if (org.telegram.messenger.yumigram.YumiConfig.isAntiDeleteEnabled()) {
+                        for (int midToDelete : mids) {
+                            org.telegram.messenger.yumigram.storage.YumiStorage.saveDeletedMessage(database, did, midToDelete);
+                        }
+                    } else {
+                        database.executeFast(String.format(Locale.US, "DELETE FROM messages_v2 WHERE mid IN(%s) AND uid = %d", ids, did)).stepThis().dispose();
+                    }
                     database.executeFast(String.format(Locale.US, "DELETE FROM messages_topics WHERE mid IN(%s) AND uid = %d", ids, did)).stepThis().dispose();
                     database.executeFast(String.format(Locale.US, "DELETE FROM polls_v2 WHERE mid IN(%s) AND uid = %d", ids, did)).stepThis().dispose();
                     database.executeFast(String.format(Locale.US, "DELETE FROM widget_state WHERE mid IN(%s) AND uid = %d", ids, did)).stepThis().dispose();

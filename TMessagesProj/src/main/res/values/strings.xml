@@ -2,6 +2,30 @@
 <resources>
     <string name="AppName">Yumigram</string>
     <string name="AppNameBeta">Yumigram Beta</string>
+    <!-- Yumigram Settings -->
+    <string name="YumiSettings">Yumigram Settings</string>
+    <string name="YumiSettingsInfo">Ghost mode, anti-delete, AI assistant and player</string>
+    <string name="YumiSectionGhost">Ghost Mode</string>
+    <string name="YumiGhostMode">Master Ghost Mode</string>
+    <string name="YumiGhostModeInfo">Enables stealth mode for all activities</string>
+    <string name="YumiHideRead">Hide Read Status</string>
+    <string name="YumiHideReadInfo">Do not send read receipts when viewing messages</string>
+    <string name="YumiHideTyping">Hide Typing Status</string>
+    <string name="YumiHideTypingInfo">Do not show typing or voice recording status</string>
+    <string name="YumiHideStoriesSeen">Watch Stories Anonymously</string>
+    <string name="YumiSectionAntiDelete">Anti-Delete</string>
+    <string name="YumiAntiDelete">Save Deleted Messages</string>
+    <string name="YumiAntiDeleteInfo">Messages deleted by others remain visible with a deleted mark</string>
+    <string name="YumiSectionAI">AI Assistant</string>
+    <string name="YumiAiEnabled">Enable AI Assistant</string>
+    <string name="YumiAiEnabledInfo">Chat summarization, smart replies and translation</string>
+    <string name="YumiAiApiKey">AI API Key</string>
+    <string name="YumiSectionPlayer">Media Player</string>
+    <string name="YumiEnhancedPlayer">Enhanced Media Player</string>
+    <string name="YumiEnhancedPlayerInfo">Extended speeds, pitch controls and sleep timer</string>
+    <string name="YumiEqualizer">Equalizer</string>
+    <string name="YumiSectionUI">Interface</string>
+    <string name="YumiHideSponsored">Hide Sponsored Messages</string>
     <string name="LanguageName">English</string>
     <string name="English">English</string>
     <string name="LanguageNameInEnglish">English</string>

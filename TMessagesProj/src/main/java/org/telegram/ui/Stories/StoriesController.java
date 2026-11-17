@@ -1342,6 +1342,10 @@ public class StoriesController {
             if (!profile) {
                 storiesStorage.updateMaxReadId(dialogId, newReadId);
             }
+            if (org.telegram.messenger.yumigram.YumiGhostController.shouldSuppressStoryView(dialogId, storyItem.id)) {
+                NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.storiesReadUpdated);
+                return true;
+            }
             TL_stories.TL_stories_readStories req = new TL_stories.TL_stories_readStories();
             req.peer = MessagesController.getInstance(currentAccount).getInputPeer(dialogId);
             req.max_id = storyItem.id;
