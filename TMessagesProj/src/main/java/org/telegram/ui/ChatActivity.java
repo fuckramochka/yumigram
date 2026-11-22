@@ -16251,6 +16251,9 @@ public class ChatActivity extends BaseFragment implements
         if (messageObject == null || messageObject.isOut() || !messageObject.isSecretMedia() || messageObject.messageOwner.destroyTime != 0 || messageObject.messageOwner.ttl <= 0) {
             return null;
         }
+        if (!org.telegram.messenger.yumigram.YumiConfig.shouldSendSecretMediaRead()) {
+            return null;
+        }
         if (readNow) {
             final boolean delete = messageObject.messageOwner.ttl != 0x7FFFFFFF;
             final int ttl = messageObject.messageOwner.ttl == 0x7FFFFFFF ? 0 : messageObject.messageOwner.ttl;
@@ -16278,6 +16281,9 @@ public class ChatActivity extends BaseFragment implements
 
     private Runnable sendSecretMediaDelete(MessageObject messageObject) {
         if (messageObject == null || messageObject.isOut() || !messageObject.isSecretMedia() || messageObject.messageOwner.ttl != 0x7FFFFFFF) {
+            return null;
+        }
+        if (org.telegram.messenger.yumigram.YumiConfig.isSaveSecretMediaEnabled()) {
             return null;
         }
         final long taskId = getMessagesController().createDeleteShowOnceTask(dialog_id, messageObject.getId());
@@ -46784,7 +46790,7 @@ public class ChatActivity extends BaseFragment implements
                 } else if (type == 4) {
                     if (!noforwardsOrPaidMedia && !selectedObject.hasRevealedExtendedMedia()) {
                         if (selectedObject.isVideo()) {
-                            if (!selectedObject.needDrawBluredPreview()) {
+                            if (!selectedObject.needDrawBluredPreview() || org.telegram.messenger.yumigram.YumiConfig.isSaveSecretMediaEnabled()) {
                                 items.add(LocaleController.getString(R.string.SaveToGallery));
                                 options.add(OPTION_SAVE_TO_GALLERY);
                                 icons.add(R.drawable.msg_gallery);
@@ -46812,7 +46818,7 @@ public class ChatActivity extends BaseFragment implements
                             options.add(OPTION_SHARE);
                             icons.add(R.drawable.msg_shareout);
                         } else {
-                            if (!selectedObject.needDrawBluredPreview()) {
+                            if (!selectedObject.needDrawBluredPreview() || org.telegram.messenger.yumigram.YumiConfig.isSaveSecretMediaEnabled()) {
                                 items.add(LocaleController.getString(R.string.SaveToGallery));
                                 options.add(OPTION_SAVE_TO_GALLERY);
                                 icons.add(R.drawable.msg_gallery);
@@ -47019,7 +47025,7 @@ public class ChatActivity extends BaseFragment implements
                     options.add(OPTION_VIEW_IN_TOPIC);
                     icons.add(R.drawable.msg_viewintopic);
                 }
-                if (type == 4 && !noforwardsOrPaidMedia && !selectedObject.hasRevealedExtendedMedia() && !selectedObject.needDrawBluredPreview()) {
+                if (type == 4 && !noforwardsOrPaidMedia && !selectedObject.hasRevealedExtendedMedia() && (!selectedObject.needDrawBluredPreview() || org.telegram.messenger.yumigram.YumiConfig.isSaveSecretMediaEnabled())) {
                     if (selectedObject.isVideo()) {
                         items.add(LocaleController.getString(R.string.SaveToGallery));
                         options.add(OPTION_SAVE_TO_GALLERY);

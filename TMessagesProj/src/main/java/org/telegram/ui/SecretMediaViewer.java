@@ -77,6 +77,7 @@ import org.telegram.messenger.Emoji;
 import org.telegram.messenger.ImageLocation;
 import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.LocaleController;
+import org.telegram.messenger.MediaController;
 import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.NotificationCenter;
@@ -89,8 +90,10 @@ import org.telegram.messenger.utils.WindowVisibilityManager;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.ActionBar;
+import org.telegram.ui.ActionBar.ActionBarMenu;
 import org.telegram.ui.ActionBar.SimpleTextView;
 import org.telegram.ui.ActionBar.Theme;
+import org.telegram.ui.Components.BulletinFactory;
 import org.telegram.ui.Cells.TextSelectionHelper;
 import org.telegram.ui.Components.AnimatedEmojiDrawable;
 import org.telegram.ui.Components.AnimatedEmojiSpan;
@@ -864,12 +867,16 @@ public class SecretMediaViewer implements NotificationCenter.NotificationCenterD
         actionBar.setItemsColor(Color.WHITE, false);
         actionBar.setBackButtonImage(R.drawable.ic_ab_back);
         actionBar.setTitleRightMargin(dp(70));
+        ActionBarMenu menu = actionBar.createMenu();
+        menu.addItem(1, R.drawable.msg_download);
         containerView.addView(actionBar, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
         actionBar.setActionBarMenuOnItemClick(new ActionBar.ActionBarMenuOnItemClick() {
             @Override
             public void onItemClick(int id) {
                 if (id == -1) {
                     closePhoto(true, false);
+                } else if (id == 1) {
+                    saveCurrentMedia();
                 }
             }
         });
@@ -965,7 +972,9 @@ public class SecretMediaViewer implements NotificationCenter.NotificationCenterD
                 WindowManager.LayoutParams.FLAG_LAYOUT_INSET_DECOR |
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
                 WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS;
-        windowLayoutParams.flags |= WindowManager.LayoutParams.FLAG_SECURE;
+        if (!org.telegram.messenger.yumigram.YumiConfig.isAllowScreenshotsInSecretMedia()) {
+            windowLayoutParams.flags |= WindowManager.LayoutParams.FLAG_SECURE;
+        }
         AndroidUtilities.logFlagSecure();
         centerImage.setParentView(containerView);
         centerImage.setForceCrossfade(true);
@@ -1699,6 +1708,35 @@ public class SecretMediaViewer implements NotificationCenter.NotificationCenterD
 
     public void setOnClose(Runnable onClose) {
         this.onClose = onClose;
+    }
+
+    private void saveCurrentMedia() {
+        if (currentMessageObject == null || parentActivity == null) {
+            return;
+        }
+        File file = null;
+        if (currentMessageObject.messageOwner != null && currentMessageObject.messageOwner.attachPath != null) {
+            File f = new File(currentMessageObject.messageOwner.attachPath);
+            if (f.exists()) {
+                file = f;
+            }
+        }
+        if (file == null && currentMessageObject.messageOwner != null) {
+            TLRPC.Document document = currentMessageObject.getDocument();
+            if (document != null) {
+                file = currentMessageObject.isLivePhoto() ? FileLoader.getInstance(currentAccount).getPathToAttach(document, null, true) : FileLoader.getInstance(currentAccount).getPathToMessage(currentMessageObject.messageOwner);
+            } else {
+                TLRPC.PhotoSize sizeFull = FileLoader.getClosestPhotoSizeWithSize(currentMessageObject.photoThumbs, AndroidUtilities.getPhotoSize());
+                if (sizeFull != null) {
+                    file = FileLoader.getInstance(currentAccount).getPathToAttach(sizeFull, true);
+                }
+            }
+        }
+        if (file != null && file.exists()) {
+            MediaController.saveFile(file.toString(), parentActivity, isVideo ? 1 : 0, null, null, uri -> {
+                BulletinFactory.createSaveToGalleryBulletin(containerView, isVideo, 0xf9222222, 0xffffffff).show();
+            });
+        }
     }
 
     public void destroyPhotoViewer() {

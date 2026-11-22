@@ -23,8 +23,15 @@ public class YumiSettingsActivity extends UniversalFragment {
     private static final int ID_HIDE_READ = 2;
     private static final int ID_HIDE_TYPING = 3;
     private static final int ID_HIDE_STORIES_SEEN = 4;
+    private static final int ID_HIDE_VOICE_LISTEN = 5;
+    private static final int ID_STAY_OFFLINE = 6;
 
     private static final int ID_ANTI_DELETE = 10;
+    private static final int ID_SAVE_DELETED_MEDIA = 11;
+
+    private static final int ID_SAVE_SECRET_MEDIA = 15;
+    private static final int ID_SEND_SECRET_MEDIA_READ = 16;
+    private static final int ID_ALLOW_SECRET_SCREENSHOTS = 17;
 
     private static final int ID_AI_ENABLED = 20;
 
@@ -70,12 +77,22 @@ public class YumiSettingsActivity extends UniversalFragment {
         items.add(UItem.asCheck(ID_HIDE_READ, getString(R.string.YumiHideRead)).setChecked(YumiConfig.isHideReadEnabled()));
         items.add(UItem.asCheck(ID_HIDE_TYPING, getString(R.string.YumiHideTyping)).setChecked(YumiConfig.isHideTypingEnabled()));
         items.add(UItem.asCheck(ID_HIDE_STORIES_SEEN, getString(R.string.YumiHideStoriesSeen)).setChecked(YumiConfig.isHideStoriesSeenEnabled()));
+        items.add(UItem.asCheck(ID_HIDE_VOICE_LISTEN, getString(R.string.YumiHideVoiceListen)).setChecked(YumiConfig.isHideVoiceListenEnabled()));
+        items.add(UItem.asCheck(ID_STAY_OFFLINE, getString(R.string.YumiStayOffline)).setChecked(YumiConfig.isStayOfflineEnabled()));
         items.add(UItem.asShadow(getString(R.string.YumiGhostModeInfo)));
 
         // --- Anti-Delete ---
         items.add(UItem.asHeader(getString(R.string.YumiSectionAntiDelete)));
         items.add(UItem.asCheck(ID_ANTI_DELETE, getString(R.string.YumiAntiDelete)).setChecked(YumiConfig.isAntiDeleteEnabled()));
-        items.add(UItem.asShadow(getString(R.string.YumiAntiDeleteInfo)));
+        items.add(UItem.asCheck(ID_SAVE_DELETED_MEDIA, getString(R.string.YumiSaveDeletedMedia)).setChecked(YumiConfig.isSaveDeletedMediaEnabled()));
+        items.add(UItem.asShadow(getString(R.string.YumiSaveDeletedMediaInfo)));
+
+        // --- View-Once Media ---
+        items.add(UItem.asHeader(getString(R.string.YumiSectionSecretMedia)));
+        items.add(UItem.asCheck(ID_SAVE_SECRET_MEDIA, getString(R.string.YumiSaveSecretMedia)).setChecked(YumiConfig.isSaveSecretMediaEnabled()));
+        items.add(UItem.asCheck(ID_SEND_SECRET_MEDIA_READ, getString(R.string.YumiSendSecretMediaRead)).setChecked(YumiConfig.shouldSendSecretMediaRead()));
+        items.add(UItem.asCheck(ID_ALLOW_SECRET_SCREENSHOTS, getString(R.string.YumiAllowSecretScreenshots)).setChecked(YumiConfig.isAllowScreenshotsInSecretMedia()));
+        items.add(UItem.asShadow(getString(R.string.YumiSendSecretMediaReadInfo)));
 
         // --- AI Assistant ---
         items.add(UItem.asHeader(getString(R.string.YumiSectionAI)));
@@ -113,8 +130,32 @@ public class YumiSettingsActivity extends UniversalFragment {
                 YumiConfig.setHideStoriesSeenEnabled(!YumiConfig.isHideStoriesSeenEnabled());
                 if (adapter != null) adapter.update(true);
                 break;
+            case ID_HIDE_VOICE_LISTEN:
+                YumiConfig.setHideVoiceListenEnabled(!YumiConfig.isHideVoiceListenEnabled());
+                if (adapter != null) adapter.update(true);
+                break;
+            case ID_STAY_OFFLINE:
+                YumiConfig.setStayOfflineEnabled(!YumiConfig.isStayOfflineEnabled());
+                if (adapter != null) adapter.update(true);
+                break;
             case ID_ANTI_DELETE:
                 YumiConfig.setAntiDeleteEnabled(!YumiConfig.isAntiDeleteEnabled());
+                if (adapter != null) adapter.update(true);
+                break;
+            case ID_SAVE_DELETED_MEDIA:
+                YumiConfig.setSaveDeletedMediaEnabled(!YumiConfig.isSaveDeletedMediaEnabled());
+                if (adapter != null) adapter.update(true);
+                break;
+            case ID_SAVE_SECRET_MEDIA:
+                YumiConfig.setSaveSecretMediaEnabled(!YumiConfig.isSaveSecretMediaEnabled());
+                if (adapter != null) adapter.update(true);
+                break;
+            case ID_SEND_SECRET_MEDIA_READ:
+                YumiConfig.setSendSecretMediaRead(!YumiConfig.shouldSendSecretMediaRead());
+                if (adapter != null) adapter.update(true);
+                break;
+            case ID_ALLOW_SECRET_SCREENSHOTS:
+                YumiConfig.setAllowScreenshotsInSecretMedia(!YumiConfig.isAllowScreenshotsInSecretMedia());
                 if (adapter != null) adapter.update(true);
                 break;
             case ID_AI_ENABLED:

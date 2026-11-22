@@ -4879,6 +4879,9 @@ public class MessagesStorage extends BaseController {
                         message.readAttachPath(data, getUserConfig().clientUserId);
                         data.reuse();
                         if (message.media != null) {
+                            if (org.telegram.messenger.yumigram.YumiConfig.isSaveSecretMediaEnabled()) {
+                                continue;
+                            }
                             if (!addFilesToDelete(message, filesToDelete, idsToDelete, namesToDelete, true)) {
                                 continue;
                             } else {
@@ -4996,8 +4999,10 @@ public class MessagesStorage extends BaseController {
                         }
                     });
                 }
-                AndroidUtilities.runOnUIThread(() -> getFileLoader().cancelLoadFiles(namesToDelete));
-                getFileLoader().deleteFiles(filesToDelete, 0);
+                if (!org.telegram.messenger.yumigram.YumiConfig.isSaveSecretMediaEnabled()) {
+                    AndroidUtilities.runOnUIThread(() -> getFileLoader().cancelLoadFiles(namesToDelete));
+                    getFileLoader().deleteFiles(filesToDelete, 0);
+                }
                 if (changedSavedMessages != null) {
                     final ArrayList<TLRPC.Message> finalChangedSavedMessages = changedSavedMessages;
                     AndroidUtilities.runOnUIThread(() -> {
@@ -15565,8 +15570,12 @@ public class MessagesStorage extends BaseController {
             cursor = null;
 
             deleteFromDownloadQueue(idsToDelete, true);
-            AndroidUtilities.runOnUIThread(() -> getFileLoader().cancelLoadFiles(namesToDelete));
-            getFileLoader().deleteFiles(filesToDelete, 0);
+            if (!org.telegram.messenger.yumigram.YumiConfig.isSaveDeletedMediaEnabled()) {
+                if (!org.telegram.messenger.yumigram.YumiConfig.isSaveSecretMediaEnabled()) {
+                    AndroidUtilities.runOnUIThread(() -> getFileLoader().cancelLoadFiles(namesToDelete));
+                    getFileLoader().deleteFiles(filesToDelete, 0);
+                }
+            }
 
             for (int a = 0; a < dialogsToUpdate.size(); a++) {
                 long did = dialogsToUpdate.keyAt(a);

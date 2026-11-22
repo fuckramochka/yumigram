@@ -4,7 +4,7 @@ import org.telegram.messenger.FileLog;
 
 /**
  * Controller managing Ghost Mode (Режим призрака) operations.
- * Intercepts read receipts, typing status, and story views.
+ * Intercepts read receipts, typing status, voice listens, story views, and online presence.
  */
 public class YumiGhostController {
 
@@ -19,6 +19,19 @@ public class YumiGhostController {
         boolean suppress = YumiConfig.isHideReadEnabled();
         if (suppress) {
             FileLog.d(TAG + ": Suppressed read receipt for dialogId=" + dialogId);
+        }
+        return suppress;
+    }
+
+    /**
+     * Determines whether listening to voice / round video notes should be suppressed from the server.
+     * @param dialogId dialog ID
+     * @return true if voice listened receipt should NOT be sent to Telegram servers
+     */
+    public static boolean shouldSuppressVoiceRead(long dialogId) {
+        boolean suppress = YumiConfig.isHideVoiceListenEnabled();
+        if (suppress) {
+            FileLog.d(TAG + ": Suppressed voice listened receipt for dialogId=" + dialogId);
         }
         return suppress;
     }
@@ -48,5 +61,13 @@ public class YumiGhostController {
             FileLog.d(TAG + ": Suppressed story view for dialogId=" + dialogId + ", storyId=" + storyId);
         }
         return suppress;
+    }
+
+    /**
+     * Determines whether online presence status should be hidden from Telegram servers.
+     * @return true if user should stay offline
+     */
+    public static boolean shouldStayOffline() {
+        return YumiConfig.isStayOfflineEnabled();
     }
 }

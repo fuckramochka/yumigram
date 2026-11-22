@@ -1,7 +1,44 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="AppName">Telegram</string>
-    <string name="AppNameBeta">Telegram Beta</string>
+    <string name="AppName">Юмиграм</string>
+    <string name="AppNameBeta">Юмиграм Бета</string>
+    <!-- Yumigram Settings -->
+    <string name="YumiSettings">Налаштування Юмиграм</string>
+    <string name="YumiSettingsInfo">Режим привида, анти-видалення, ШІ та плеєр</string>
+    <string name="YumiSectionGhost">Режим привида</string>
+    <string name="YumiGhostMode">Головний режим привида</string>
+    <string name="YumiGhostModeInfo">Вмикає повний режим прихованості для всіх дій</string>
+    <string name="YumiHideRead">Не позначати прочитаним</string>
+    <string name="YumiHideReadInfo">Співрозмовник не дізнається, що ви прочитали повідомлення</string>
+    <string name="YumiHideTyping">Приховувати статус «друкує…»</string>
+    <string name="YumiHideTypingInfo">Не надсилати статус набору тексту або запису аудіо</string>
+    <string name="YumiHideStoriesSeen">Дивитися історії анонімно</string>
+    <string name="YumiHideVoiceListen">Приховувати прослуховування голосових</string>
+    <string name="YumiHideVoiceListenInfo">Не відправляти статус прослуховування голосових та відеоповідомлень</string>
+    <string name="YumiStayOffline">Режим офлайн</string>
+    <string name="YumiStayOfflineInfo">Ніколи не надсилати статус «в мережі» на сервери Telegram</string>
+    <string name="YumiSectionAntiDelete">Анти-видалення</string>
+    <string name="YumiAntiDelete">Зберігати видалені повідомлення</string>
+    <string name="YumiAntiDeleteInfo">Видалені співрозмовником повідомлення залишаться видимими з позначкою кошика</string>
+    <string name="YumiSaveDeletedMedia">Зберігати файли видалених медіа</string>
+    <string name="YumiSaveDeletedMediaInfo">Зберігати фото, відео та файли на пристрої навіть після видалення відправником</string>
+    <string name="YumiSectionSecretMedia">Одноразові медіа</string>
+    <string name="YumiSaveSecretMedia">Зберігати одноразові медіа</string>
+    <string name="YumiSaveSecretMediaInfo">Одноразові фото та відео залишаться збереженими в чаті локально після перегляду</string>
+    <string name="YumiSendSecretMediaRead">Відправляти статус перегляду одноразових медіа</string>
+    <string name="YumiSendSecretMediaReadInfo">Якщо увімкнено: відправник бачить перегляд і воно у нього зникає (у вас залишається). Якщо вимкнено: повідомлення для всіх виглядає непереглянутим.</string>
+    <string name="YumiAllowSecretScreenshots">Дозволити скріншоти та запис екрана</string>
+    <string name="YumiAllowSecretScreenshotsInfo">Знімає заборону створення скріншотів у вікні перегляду одноразових медіа</string>
+    <string name="YumiSectionAI">ШІ-помічник</string>
+    <string name="YumiAiEnabled">Увімкнути ШІ-помічника</string>
+    <string name="YumiAiEnabledInfo">Самарі чатів, розумні відповіді та переклад</string>
+    <string name="YumiAiApiKey">API-ключ ШІ</string>
+    <string name="YumiSectionPlayer">Медіаплеєр</string>
+    <string name="YumiEnhancedPlayer">Розширений медіаплеєр</string>
+    <string name="YumiEnhancedPlayerInfo">Розширені швидкості відтворення та таймер сну</string>
+    <string name="YumiEqualizer">Еквалайзер звуку</string>
+    <string name="YumiSectionUI">Інтерфейс</string>
+    <string name="YumiHideSponsored">Приховувати рекламу та спонсорів</string>
     <string name="LanguageName">Українська</string>
     <string name="English">Англійська</string>
     <string name="LanguageNameInEnglish">Ukrainian</string>
