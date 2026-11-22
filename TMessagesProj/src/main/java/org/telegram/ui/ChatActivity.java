@@ -1728,6 +1728,9 @@ public class ChatActivity extends BaseFragment implements
     private final static int chat_menu_topic_create = 73;
     private final static int chat_menu_topics_panel = 75;
 
+    private final static int yumi_menu_ai_copilot = 991;
+    private final static int yumi_menu_ai_summarize = 992;
+
     private final static int id_chat_compose_panel = 1000;
 
     RecyclerListView.OnItemLongClickListenerExtended onItemLongClickListener = new RecyclerListView.OnItemLongClickListenerExtended() {
@@ -3995,6 +3998,10 @@ public class ChatActivity extends BaseFragment implements
                     if (!getMessagesController().getTranslateController().toggleTranslatingDialog(getDialogId(), true)) {
                         updateTopPanel(true);
                     }
+                } else if (id == yumi_menu_ai_summarize) {
+                    showAiSummarizeDialog();
+                } else if (id == yumi_menu_ai_copilot) {
+                    presentFragment(new YumiAiCopilotActivity());
                 } else if (id == call || id == video_call) {
                     if (currentUser != null && getParentActivity() != null) {
                         VoIPHelper.startCall(currentUser, id == video_call, userInfo != null && userInfo.video_calls_available, getParentActivity(), getMessagesController().getUserFull(currentUser.id), getAccountInstance());
@@ -4404,6 +4411,10 @@ public class ChatActivity extends BaseFragment implements
             }
             translateItem = headerItem.lazilyAddSubItem(translate, R.drawable.msg_translate, LocaleController.getString(R.string.TranslateMessage));
             updateTranslateItemVisibility();
+            if (org.telegram.messenger.yumigram.YumiConfig.isAiEnabled()) {
+                headerItem.lazilyAddSubItem(yumi_menu_ai_summarize, R.drawable.msg_bot, "ШІ: Переказати чат");
+                headerItem.lazilyAddSubItem(yumi_menu_ai_copilot, R.drawable.msg_bot, "Yumi Copilot ✨");
+            }
             if (currentChat != null && !currentChat.creator && !ChatObject.hasAdminRights(currentChat)) {
                 headerItem.lazilyAddSubItem(report, R.drawable.msg_report, LocaleController.getString(R.string.ReportChat));
             }
@@ -9046,6 +9057,54 @@ public class ChatActivity extends BaseFragment implements
         }
 
         return fragmentView;
+    }
+
+    private void showAiSummarizeDialog() {
+        if (getParentActivity() == null) return;
+        if (!org.telegram.messenger.yumigram.YumiConfig.isAiEnabled()) {
+            showDialog(new AlertDialog.Builder(getParentActivity(), getResourceProvider())
+                    .setTitle("ШІ вимкнено")
+                    .setMessage("Увімкніть ШІ в налаштуваннях Yumigram")
+                    .setPositiveButton(LocaleController.getString(R.string.OK), null)
+                    .create());
+            return;
+        }
+        AlertDialog progress = new AlertDialog(getParentActivity(), AlertDialog.ALERT_TYPE_SPINNER, themeDelegate);
+        progress.setMessage("ШІ аналізує останні повідомлення...");
+        progress.setCanceledOnTouchOutside(false);
+        progress.setCancelable(false);
+        progress.show();
+
+        org.telegram.messenger.yumigram.ai.YumiAiManager.summarizeMessages(messages, new org.telegram.messenger.yumigram.ai.YumiAiManager.AiCallback() {
+            @Override
+            public void onSuccess(String result) {
+                AndroidUtilities.runOnUIThread(() -> {
+                    try { progress.dismiss(); } catch (Exception ignore) {}
+                    if (getParentActivity() == null) return;
+                    AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity(), getResourceProvider());
+                    builder.setTitle("✨ Підсумок бесіди");
+                    builder.setMessage(result);
+                    builder.setPositiveButton(LocaleController.getString(R.string.OK), null);
+                    builder.setNegativeButton(LocaleController.getString(R.string.Copy), (dialog, which) -> {
+                        AndroidUtilities.addToClipboard(result);
+                    });
+                    showDialog(builder.create());
+                });
+            }
+
+            @Override
+            public void onError(String errorMessage) {
+                AndroidUtilities.runOnUIThread(() -> {
+                    try { progress.dismiss(); } catch (Exception ignore) {}
+                    if (getParentActivity() == null) return;
+                    AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity(), getResourceProvider());
+                    builder.setTitle("Помилка ШІ");
+                    builder.setMessage(errorMessage);
+                    builder.setPositiveButton(LocaleController.getString(R.string.OK), null);
+                    showDialog(builder.create());
+                });
+            }
+        });
     }
 
     private void createSearchHashtagViewsIfNeeded() {

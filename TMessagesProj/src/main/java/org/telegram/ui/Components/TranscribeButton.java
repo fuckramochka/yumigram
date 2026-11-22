@@ -209,7 +209,7 @@ public class TranscribeButton {
         boolean processClick, toOpen = !shouldBeOpen;
         if (!shouldBeOpen) {
             processClick = !loading;
-            if ((premium || canTranscribeTrial(parent.getMessageObject())) && parent.getMessageObject().isSent()) {
+            if ((premium || canTranscribeTrial(parent.getMessageObject()) || org.telegram.messenger.yumigram.YumiConfig.isAiEnabled()) && parent.getMessageObject().isSent()) {
                 setLoading(true, true);
             }
         } else {
@@ -224,7 +224,7 @@ public class TranscribeButton {
         pressed = false;
         if (processClick) {
             if (!premium && toOpen) {
-                if (canTranscribeTrial(parent.getMessageObject()) || parent.getMessageObject() != null && parent.getMessageObject().messageOwner != null && !TextUtils.isEmpty(parent.getMessageObject().messageOwner.voiceTranscription)) {
+                if (canTranscribeTrial(parent.getMessageObject()) || (parent.getMessageObject() != null && parent.getMessageObject().messageOwner != null && !TextUtils.isEmpty(parent.getMessageObject().messageOwner.voiceTranscription)) || org.telegram.messenger.yumigram.YumiConfig.isAiEnabled()) {
                     transcribePressed(parent.getMessageObject(), toOpen, parent.getDelegate());
                 } else {
                     if (parent.getDelegate() != null) {
@@ -684,6 +684,20 @@ public class TranscribeButton {
                     NotificationCenter.getInstance(account).postNotificationName(NotificationCenter.voiceTranscriptionUpdate, messageObject, null, null, (Boolean) true, (Boolean) true);
                 });
             } else {
+                if (org.telegram.messenger.yumigram.YumiConfig.isAiEnabled()) {
+                    org.telegram.messenger.yumigram.ai.YumiAiManager.transcribeVoice(messageObject, new org.telegram.messenger.yumigram.ai.YumiAiManager.AiCallback() {
+                        @Override
+                        public void onSuccess(String text) {
+                            finishTranscription(messageObject, 0, text);
+                        }
+
+                        @Override
+                        public void onError(String errorMessage) {
+                            finishTranscription(messageObject, 0, "⚠️ " + errorMessage);
+                        }
+                    });
+                    return;
+                }
                 if (BuildVars.LOGS_ENABLED) {
                     FileLog.d("sending Transcription request, msg_id=" + messageId + " dialog_id=" + dialogId);
                 }
@@ -854,6 +868,9 @@ public class TranscribeButton {
     }
 
     public static boolean showTranscribeLock(MessageObject messageObject) {
+        if (org.telegram.messenger.yumigram.YumiConfig.isAiEnabled()) {
+            return false;
+        }
         if (messageObject == null || messageObject.messageOwner == null) {
             return false;
         }

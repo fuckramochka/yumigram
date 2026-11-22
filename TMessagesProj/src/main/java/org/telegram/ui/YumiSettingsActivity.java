@@ -3,15 +3,25 @@ package org.telegram.ui;
 import static org.telegram.messenger.LocaleController.getString;
 
 import android.content.Context;
+import android.content.DialogInterface;
+import android.text.InputType;
 import android.view.View;
+import android.widget.EditText;
+import android.widget.Toast;
 
+import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.R;
 import org.telegram.messenger.yumigram.YumiConfig;
+import org.telegram.messenger.yumigram.ai.YumiLocalAiManager;
+import org.telegram.ui.ActionBar.AlertDialog;
+import org.telegram.ui.ActionBar.Theme;
+import org.telegram.ui.Components.BulletinFactory;
 import org.telegram.ui.Components.RecyclerListView;
 import org.telegram.ui.Components.UItem;
 import org.telegram.ui.Components.UniversalAdapter;
 import org.telegram.ui.Components.UniversalFragment;
 
+import java.io.File;
 import java.util.ArrayList;
 
 /**
@@ -34,11 +44,21 @@ public class YumiSettingsActivity extends UniversalFragment {
     private static final int ID_ALLOW_SECRET_SCREENSHOTS = 17;
 
     private static final int ID_AI_ENABLED = 20;
+    private static final int ID_AI_OPEN_COPILOT = 21;
+    private static final int ID_AI_MODE_CLOUD = 22;
+    private static final int ID_AI_MODE_LOCAL = 23;
+    private static final int ID_AI_API_KEY = 24;
+    private static final int ID_AI_PRIMARY_MODEL = 25;
+    private static final int ID_AI_FALLBACK_MODEL = 26;
+    private static final int ID_AI_LOCAL_MODEL = 27;
+    private static final int ID_AI_DOWNLOAD_LOCAL = 28;
 
     private static final int ID_ENHANCED_PLAYER = 30;
     private static final int ID_EQUALIZER = 31;
 
     private static final int ID_HIDE_SPONSORED = 40;
+
+    private String downloadStatus = null;
 
     @Override
     protected CharSequence getTitle() {
@@ -97,7 +117,35 @@ public class YumiSettingsActivity extends UniversalFragment {
         // --- AI Assistant ---
         items.add(UItem.asHeader(getString(R.string.YumiSectionAI)));
         items.add(UItem.asCheck(ID_AI_ENABLED, getString(R.string.YumiAiEnabled)).setChecked(YumiConfig.isAiEnabled()));
-        items.add(UItem.asShadow(getString(R.string.YumiAiEnabledInfo)));
+
+        if (YumiConfig.isAiEnabled()) {
+            items.add(UItem.asButton(ID_AI_OPEN_COPILOT, R.drawable.msg_bot, "✨ Відкрити чат з ШІ (Yumi Copilot)"));
+
+            boolean isLocal = YumiConfig.isLocalAi();
+            items.add(UItem.asRadio(ID_AI_MODE_CLOUD, "Хмарний ШІ (Google Gemini API)").setChecked(!isLocal));
+            items.add(UItem.asRadio(ID_AI_MODE_LOCAL, "Локальний ШІ (On-Device / Hugging Face)").setChecked(isLocal));
+
+            if (!isLocal) {
+                // Cloud Gemini settings
+                String key = YumiConfig.getAiApiKey();
+                String keyText = TextUtils.isEmpty(key) ? "Не налаштовано (натисніть, щоб додати)" : "••••••••" + key.substring(Math.max(0, key.length() - 4));
+                items.add(UItem.asButton(ID_AI_API_KEY, "API-ключ Gemini: " + keyText));
+                items.add(UItem.asButton(ID_AI_PRIMARY_MODEL, "Основна модель: " + YumiConfig.getAiPrimaryModel()));
+                items.add(UItem.asButton(ID_AI_FALLBACK_MODEL, "Резервна модель (Fallback): " + YumiConfig.getAiFallbackModel()));
+                items.add(UItem.asShadow("Хмарний режим: передові моделі Gemini 3.5/3.1 з автоматичним перемиканням при перевантаженні"));
+            } else {
+                // Local Hugging Face settings
+                YumiLocalAiManager.LocalModelInfo modelInfo = YumiLocalAiManager.getModelInfo(YumiConfig.getAiLocalModelId());
+                boolean downloaded = YumiLocalAiManager.isModelDownloaded(modelInfo.id);
+
+                items.add(UItem.asButton(ID_AI_LOCAL_MODEL, "Модель: " + modelInfo.name + " (" + modelInfo.size + ")"));
+                String btnText = downloaded ? "✅ Модель завантажена (готова до роботи)" : (downloadStatus != null ? downloadStatus : "📥 Завантажити модель з Hugging Face");
+                items.add(UItem.asButton(ID_AI_DOWNLOAD_LOCAL, btnText));
+                items.add(UItem.asShadow("Локальний режим працює повністю на вашому пристрої offline без відправки даних у хмару."));
+            }
+        } else {
+            items.add(UItem.asShadow(getString(R.string.YumiAiEnabledInfo)));
+        }
 
         // --- Media Player ---
         items.add(UItem.asHeader(getString(R.string.YumiSectionPlayer)));
@@ -162,6 +210,32 @@ public class YumiSettingsActivity extends UniversalFragment {
                 YumiConfig.setAiEnabled(!YumiConfig.isAiEnabled());
                 if (adapter != null) adapter.update(true);
                 break;
+            case ID_AI_OPEN_COPILOT:
+                presentFragment(new YumiAiCopilotActivity());
+                break;
+            case ID_AI_MODE_CLOUD:
+                YumiConfig.setAiMode("cloud");
+                if (adapter != null) adapter.update(true);
+                break;
+            case ID_AI_MODE_LOCAL:
+                YumiConfig.setAiMode("local");
+                if (adapter != null) adapter.update(true);
+                break;
+            case ID_AI_API_KEY:
+                showApiKeyDialog();
+                break;
+            case ID_AI_PRIMARY_MODEL:
+                showModelSelectDialog(true);
+                break;
+            case ID_AI_FALLBACK_MODEL:
+                showModelSelectDialog(false);
+                break;
+            case ID_AI_LOCAL_MODEL:
+                showLocalModelSelectDialog();
+                break;
+            case ID_AI_DOWNLOAD_LOCAL:
+                startDownloadLocalModel();
+                break;
             case ID_ENHANCED_PLAYER:
                 YumiConfig.setEnhancedPlayerEnabled(!YumiConfig.isEnhancedPlayerEnabled());
                 if (adapter != null) adapter.update(true);
@@ -175,5 +249,94 @@ public class YumiSettingsActivity extends UniversalFragment {
                 if (adapter != null) adapter.update(true);
                 break;
         }
+    }
+
+    private void showApiKeyDialog() {
+        if (getParentActivity() == null) return;
+        AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity());
+        builder.setTitle("API-ключ Google Gemini");
+        builder.setMessage("Введіть безкоштовний API-ключ з aistudio.google.com");
+
+        final EditText input = new EditText(getParentActivity());
+        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        input.setText(YumiConfig.getAiApiKey());
+        builder.setView(input);
+
+        builder.setPositiveButton("Зберегти", (dialog, which) -> {
+            YumiConfig.setAiApiKey(input.getText().toString().trim());
+            if (adapter != null) adapter.update(true);
+        });
+        builder.setNegativeButton("Скасувати", null);
+        builder.show();
+    }
+
+    private void showModelSelectDialog(boolean isPrimary) {
+        if (getParentActivity() == null) return;
+        AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity());
+        builder.setTitle(isPrimary ? "Виберіть основну модель" : "Виберіть резервну модель (Fallback)");
+
+        String[] models = YumiConfig.CLOUD_MODELS;
+        builder.setItems(models, (dialog, which) -> {
+            String selected = models[which];
+            if (isPrimary) {
+                YumiConfig.setAiPrimaryModel(selected);
+            } else {
+                YumiConfig.setAiFallbackModel(selected);
+            }
+            if (adapter != null) adapter.update(true);
+        });
+        builder.show();
+    }
+
+    private void showLocalModelSelectDialog() {
+        if (getParentActivity() == null) return;
+        AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity());
+        builder.setTitle("Виберіть локальну модель (Hugging Face)");
+
+        CharSequence[] names = new CharSequence[YumiLocalAiManager.AVAILABLE_LOCAL_MODELS.size()];
+        for (int i = 0; i < names.length; i++) {
+            YumiLocalAiManager.LocalModelInfo info = YumiLocalAiManager.AVAILABLE_LOCAL_MODELS.get(i);
+            names[i] = info.name + " (" + info.size + ")";
+        }
+
+        builder.setItems(names, (dialog, which) -> {
+            YumiConfig.setAiLocalModelId(YumiLocalAiManager.AVAILABLE_LOCAL_MODELS.get(which).id);
+            if (adapter != null) adapter.update(true);
+        });
+        builder.show();
+    }
+
+    private void startDownloadLocalModel() {
+        String modelId = YumiConfig.getAiLocalModelId();
+        if (YumiLocalAiManager.isModelDownloaded(modelId)) {
+            Toast.makeText(getParentActivity(), "Модель вже завантажена!", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        downloadStatus = "⏳ Завантаження: 0%...";
+        if (adapter != null) adapter.update(true);
+
+        YumiLocalAiManager.downloadModel(modelId, new YumiLocalAiManager.DownloadProgressCallback() {
+            @Override
+            public void onProgress(int percent, long downloadedBytes, long totalBytes) {
+                downloadStatus = "⏳ Завантаження: " + percent + "% (" + (downloadedBytes / (1024 * 1024)) + " MB)...";
+                if (adapter != null) adapter.update(true);
+            }
+
+            @Override
+            public void onSuccess(File modelFile) {
+                downloadStatus = null;
+                if (adapter != null) adapter.update(true);
+                if (getParentActivity() != null) {
+                    Toast.makeText(getParentActivity(), "Модель успішно завантажена з Hugging Face!", Toast.LENGTH_LONG).show();
+                }
+            }
+
+            @Override
+            public void onError(String error) {
+                downloadStatus = "❌ Помилка: " + error;
+                if (adapter != null) adapter.update(true);
+            }
+        });
     }
 }

@@ -48,10 +48,27 @@ public class YumiConfig {
 
     // --- 6. Built-in AI Assistant ---
     public static final String KEY_AI_ENABLED = "yumi_ai_enabled";
+    public static final String KEY_AI_MODE = "yumi_ai_mode"; // "cloud", "local"
     public static final String KEY_AI_PROVIDER = "yumi_ai_provider"; // "gemini", "openai", "custom"
     public static final String KEY_AI_API_KEY = "yumi_ai_api_key";
-    public static final String KEY_AI_MODEL = "yumi_ai_model";
+    public static final String KEY_AI_PRIMARY_MODEL = "yumi_ai_primary_model";
+    public static final String KEY_AI_FALLBACK_MODEL = "yumi_ai_fallback_model";
+    public static final String KEY_AI_LOCAL_MODEL_ID = "yumi_ai_local_model_id";
     public static final String KEY_AI_SUMMARIZE_LIMIT = "yumi_ai_summarize_limit";
+
+    public static final String DEFAULT_PRIMARY_MODEL = "gemini-3.5-flash-lite";
+    public static final String DEFAULT_FALLBACK_MODEL = "gemini-3.1-flash-lite";
+
+    public static final String[] CLOUD_MODELS = new String[] {
+            "gemini-3.5-flash-lite",
+            "gemini-3.1-flash-lite",
+            "gemini-3.0-flash",
+            "gemini-2.5-flash-lite",
+            "gemini-2.5-flash",
+            "gemini-2.0-flash",
+            "gemini-1.5-flash",
+            "gemini-1.5-pro"
+    };
 
     // --- 7. Enhanced Media Player ---
     public static final String KEY_ENHANCED_PLAYER = "yumi_enhanced_player";
@@ -257,6 +274,58 @@ public class YumiConfig {
         SharedPreferences p = getPrefs();
         if (p != null) {
             p.edit().putString(KEY_AI_API_KEY, apiKey).apply();
+        }
+    }
+
+    public static String getAiMode() {
+        SharedPreferences p = getPrefs();
+        return p != null ? p.getString(KEY_AI_MODE, "cloud") : "cloud";
+    }
+
+    public static void setAiMode(String mode) {
+        SharedPreferences p = getPrefs();
+        if (p != null) {
+            p.edit().putString(KEY_AI_MODE, mode).apply();
+        }
+    }
+
+    public static boolean isLocalAi() {
+        return "local".equalsIgnoreCase(getAiMode());
+    }
+
+    public static String getAiPrimaryModel() {
+        SharedPreferences p = getPrefs();
+        return p != null ? p.getString(KEY_AI_PRIMARY_MODEL, DEFAULT_PRIMARY_MODEL) : DEFAULT_PRIMARY_MODEL;
+    }
+
+    public static void setAiPrimaryModel(String model) {
+        SharedPreferences p = getPrefs();
+        if (p != null) {
+            p.edit().putString(KEY_AI_PRIMARY_MODEL, model).apply();
+        }
+    }
+
+    public static String getAiFallbackModel() {
+        SharedPreferences p = getPrefs();
+        return p != null ? p.getString(KEY_AI_FALLBACK_MODEL, DEFAULT_FALLBACK_MODEL) : DEFAULT_FALLBACK_MODEL;
+    }
+
+    public static void setAiFallbackModel(String model) {
+        SharedPreferences p = getPrefs();
+        if (p != null) {
+            p.edit().putString(KEY_AI_FALLBACK_MODEL, model).apply();
+        }
+    }
+
+    public static String getAiLocalModelId() {
+        SharedPreferences p = getPrefs();
+        return p != null ? p.getString(KEY_AI_LOCAL_MODEL_ID, "qwen2.5-0.5b") : "qwen2.5-0.5b";
+    }
+
+    public static void setAiLocalModelId(String modelId) {
+        SharedPreferences p = getPrefs();
+        if (p != null) {
+            p.edit().putString(KEY_AI_LOCAL_MODEL_ID, modelId).apply();
         }
     }
 

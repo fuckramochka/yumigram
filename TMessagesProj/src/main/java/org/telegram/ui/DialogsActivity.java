@@ -13394,6 +13394,12 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             args.putLong("user_id", UserConfig.getInstance(currentAccount).getClientUserId());
             presentFragment(new ChatActivity(args));
         });
+        io.add(R.drawable.msg_bot, "Yumi Copilot ✨", () -> {
+            presentFragment(new YumiAiCopilotActivity());
+        });
+        io.add(R.drawable.msg_settings_old, "Yumigram " + LocaleController.getString(R.string.Settings), () -> {
+            presentFragment(new YumiSettingsActivity());
+        });
         if (ApplicationLoader.applicationLoaderInstance != null) {
             ApplicationLoader.applicationLoaderInstance.addItemOptions(io);
         }
