@@ -164,62 +164,62 @@ public class YumiSettingsActivity extends UniversalFragment {
         switch (item.id) {
             case ID_GHOST_MODE:
                 YumiConfig.setGhostModeEnabled(!YumiConfig.isGhostModeEnabled());
-                if (adapter != null) adapter.update(true);
+                updateList();
                 break;
             case ID_HIDE_READ:
                 YumiConfig.setHideReadEnabled(!YumiConfig.isHideReadEnabled());
-                if (adapter != null) adapter.update(true);
+                updateList();
                 break;
             case ID_HIDE_TYPING:
                 YumiConfig.setHideTypingEnabled(!YumiConfig.isHideTypingEnabled());
-                if (adapter != null) adapter.update(true);
+                updateList();
                 break;
             case ID_HIDE_STORIES_SEEN:
                 YumiConfig.setHideStoriesSeenEnabled(!YumiConfig.isHideStoriesSeenEnabled());
-                if (adapter != null) adapter.update(true);
+                updateList();
                 break;
             case ID_HIDE_VOICE_LISTEN:
                 YumiConfig.setHideVoiceListenEnabled(!YumiConfig.isHideVoiceListenEnabled());
-                if (adapter != null) adapter.update(true);
+                updateList();
                 break;
             case ID_STAY_OFFLINE:
                 YumiConfig.setStayOfflineEnabled(!YumiConfig.isStayOfflineEnabled());
-                if (adapter != null) adapter.update(true);
+                updateList();
                 break;
             case ID_ANTI_DELETE:
                 YumiConfig.setAntiDeleteEnabled(!YumiConfig.isAntiDeleteEnabled());
-                if (adapter != null) adapter.update(true);
+                updateList();
                 break;
             case ID_SAVE_DELETED_MEDIA:
                 YumiConfig.setSaveDeletedMediaEnabled(!YumiConfig.isSaveDeletedMediaEnabled());
-                if (adapter != null) adapter.update(true);
+                updateList();
                 break;
             case ID_SAVE_SECRET_MEDIA:
                 YumiConfig.setSaveSecretMediaEnabled(!YumiConfig.isSaveSecretMediaEnabled());
-                if (adapter != null) adapter.update(true);
+                updateList();
                 break;
             case ID_SEND_SECRET_MEDIA_READ:
                 YumiConfig.setSendSecretMediaRead(!YumiConfig.shouldSendSecretMediaRead());
-                if (adapter != null) adapter.update(true);
+                updateList();
                 break;
             case ID_ALLOW_SECRET_SCREENSHOTS:
                 YumiConfig.setAllowScreenshotsInSecretMedia(!YumiConfig.isAllowScreenshotsInSecretMedia());
-                if (adapter != null) adapter.update(true);
+                updateList();
                 break;
             case ID_AI_ENABLED:
                 YumiConfig.setAiEnabled(!YumiConfig.isAiEnabled());
-                if (adapter != null) adapter.update(true);
+                updateList();
                 break;
             case ID_AI_OPEN_COPILOT:
                 presentFragment(new YumiAiCopilotActivity());
                 break;
             case ID_AI_MODE_CLOUD:
                 YumiConfig.setAiMode("cloud");
-                if (adapter != null) adapter.update(true);
+                updateList();
                 break;
             case ID_AI_MODE_LOCAL:
                 YumiConfig.setAiMode("local");
-                if (adapter != null) adapter.update(true);
+                updateList();
                 break;
             case ID_AI_API_KEY:
                 showApiKeyDialog();
@@ -238,16 +238,27 @@ public class YumiSettingsActivity extends UniversalFragment {
                 break;
             case ID_ENHANCED_PLAYER:
                 YumiConfig.setEnhancedPlayerEnabled(!YumiConfig.isEnhancedPlayerEnabled());
-                if (adapter != null) adapter.update(true);
+                updateList();
                 break;
             case ID_EQUALIZER:
                 YumiConfig.setEqualizerEnabled(!YumiConfig.isEqualizerEnabled());
-                if (adapter != null) adapter.update(true);
+                updateList();
                 break;
             case ID_HIDE_SPONSORED:
                 YumiConfig.setHideSponsoredEnabled(!YumiConfig.isHideSponsoredEnabled());
-                if (adapter != null) adapter.update(true);
+                updateList();
                 break;
+        }
+    }
+
+    @Override
+    protected boolean onLongClick(UItem item, View view, int position, float x, float y) {
+        return false;
+    }
+
+    private void updateList() {
+        if (listView != null && listView.adapter != null) {
+            listView.adapter.update(true);
         }
     }
 
@@ -264,7 +275,7 @@ public class YumiSettingsActivity extends UniversalFragment {
 
         builder.setPositiveButton("Зберегти", (dialog, which) -> {
             YumiConfig.setAiApiKey(input.getText().toString().trim());
-            if (adapter != null) adapter.update(true);
+            updateList();
         });
         builder.setNegativeButton("Скасувати", null);
         builder.show();
@@ -283,7 +294,7 @@ public class YumiSettingsActivity extends UniversalFragment {
             } else {
                 YumiConfig.setAiFallbackModel(selected);
             }
-            if (adapter != null) adapter.update(true);
+            updateList();
         });
         builder.show();
     }
@@ -301,7 +312,7 @@ public class YumiSettingsActivity extends UniversalFragment {
 
         builder.setItems(names, (dialog, which) -> {
             YumiConfig.setAiLocalModelId(YumiLocalAiManager.AVAILABLE_LOCAL_MODELS.get(which).id);
-            if (adapter != null) adapter.update(true);
+            updateList();
         });
         builder.show();
     }
@@ -314,19 +325,19 @@ public class YumiSettingsActivity extends UniversalFragment {
         }
 
         downloadStatus = "⏳ Завантаження: 0%...";
-        if (adapter != null) adapter.update(true);
+        updateList();
 
         YumiLocalAiManager.downloadModel(modelId, new YumiLocalAiManager.DownloadProgressCallback() {
             @Override
             public void onProgress(int percent, long downloadedBytes, long totalBytes) {
                 downloadStatus = "⏳ Завантаження: " + percent + "% (" + (downloadedBytes / (1024 * 1024)) + " MB)...";
-                if (adapter != null) adapter.update(true);
+                updateList();
             }
 
             @Override
             public void onSuccess(File modelFile) {
                 downloadStatus = null;
-                if (adapter != null) adapter.update(true);
+                updateList();
                 if (getParentActivity() != null) {
                     Toast.makeText(getParentActivity(), "Модель успішно завантажена з Hugging Face!", Toast.LENGTH_LONG).show();
                 }
@@ -335,7 +346,7 @@ public class YumiSettingsActivity extends UniversalFragment {
             @Override
             public void onError(String error) {
                 downloadStatus = "❌ Помилка: " + error;
-                if (adapter != null) adapter.update(true);
+                updateList();
             }
         });
     }

@@ -180,7 +180,7 @@ public class YumiAiCopilotActivity extends BaseFragment {
         TLRPC.User foundUser = findUserByName(targetName);
         if (foundUser != null) {
             SendMessagesHelper.getInstance(currentAccount).sendMessage(
-                    SendMessagesHelper.SendMessageParams.of(messageBody, foundUser.id, null, null, null, true, 0)
+                    SendMessagesHelper.SendMessageParams.of(messageBody, foundUser.id)
             );
             messages.add(new ChatEntry(true, "✅ Повідомлення успішно надіслано для " + foundUser.first_name + ":\n\"" + messageBody + "\""));
         } else {
@@ -198,14 +198,32 @@ public class YumiAiCopilotActivity extends BaseFragment {
             messages.add(new ChatEntry(true, "📖 Читаю останні повідомлення з чату " + foundUser.first_name + "...\n(Аналізую вміст за допомогою ШІ)"));
             adapter.notifyItemInserted(messages.size() - 1);
 
-            // Fetch and summarize
-            MessagesController.getInstance(currentAccount).loadMessages(foundUser.id, 0, false, 20, 0, 0, false, 0, 0, 0, 0, 0, 0, (res, err) -> {
-                AndroidUtilities.runOnUIThread(() -> {
-                    messages.add(new ChatEntry(true, "В останніх повідомленнях з " + foundUser.first_name + " обговорювалися плани та поточні питання."));
-                    adapter.notifyItemInserted(messages.size() - 1);
-                    recyclerView.scrollToPosition(messages.size() - 1);
+            ArrayList<MessageObject> msgList = MessagesController.getInstance(currentAccount).dialogMessage.get(foundUser.id);
+            if (msgList != null && !msgList.isEmpty()) {
+                YumiAiManager.summarizeMessages(msgList, new YumiAiManager.AiCallback() {
+                    @Override
+                    public void onSuccess(String result) {
+                        AndroidUtilities.runOnUIThread(() -> {
+                            messages.add(new ChatEntry(true, "📖 Стислий зміст чату " + foundUser.first_name + ":\n\n" + result));
+                            adapter.notifyItemInserted(messages.size() - 1);
+                            recyclerView.scrollToPosition(messages.size() - 1);
+                        });
+                    }
+
+                    @Override
+                    public void onError(String errorMessage) {
+                        AndroidUtilities.runOnUIThread(() -> {
+                            messages.add(new ChatEntry(true, "⚠️ Помилка аналізу повідомлень: " + errorMessage));
+                            adapter.notifyItemInserted(messages.size() - 1);
+                            recyclerView.scrollToPosition(messages.size() - 1);
+                        });
+                    }
                 });
-            });
+            } else {
+                messages.add(new ChatEntry(true, "Не знайдено завантажених повідомлень у чаті з " + foundUser.first_name + ". Відкрийте цей чат, щоб синхронізувати його."));
+                adapter.notifyItemInserted(messages.size() - 1);
+                recyclerView.scrollToPosition(messages.size() - 1);
+            }
         } else {
             messages.add(new ChatEntry(true, "Чат з «" + targetName + "» не знайдено серед ваших діалогів."));
             adapter.notifyItemInserted(messages.size() - 1);
