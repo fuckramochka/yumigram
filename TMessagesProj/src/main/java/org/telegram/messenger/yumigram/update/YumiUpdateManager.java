@@ -83,15 +83,16 @@ public class YumiUpdateManager {
         }
     }
 
+    @FunctionalInterface
     public interface CheckCallback {
         void onSuccess(UpdateInfo update, boolean hasUpdate);
-        void onError(String error);
+        default void onError(String error) {}
     }
 
     public interface DownloadCallback {
         void onProgress(int percent, long downloadedBytes, long totalBytes);
         void onSuccess(File apkFile);
-        void onError(String error);
+        default void onError(String error) {}
     }
 
     public static UpdateInfo getCachedUpdate() {
