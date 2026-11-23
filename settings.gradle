@@ -10,6 +10,7 @@ project(':jlatexmath').projectDir = file('TMessagesProj/lib/jlatexmath/jlatexmat
 dependencyResolutionManagement {
     repositories {
         google()
+        maven { url 'https://maven-central.storage-download.googleapis.com/maven2/' }
         mavenCentral()
     }
 }
