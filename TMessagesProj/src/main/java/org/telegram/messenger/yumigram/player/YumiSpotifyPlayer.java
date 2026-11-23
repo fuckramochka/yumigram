@@ -67,7 +67,7 @@ public class YumiSpotifyPlayer {
 
             // 2. Style SeekBar with Spotify Green
             if (seekBarView != null) {
-                seekBarView.setInnerColors(0x33FFFFFF, SPOTIFY_GREEN);
+                seekBarView.setColors(0x33FFFFFF, SPOTIFY_GREEN);
             }
 
             // 3. Dynamic background gradient from album artwork

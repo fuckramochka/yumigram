@@ -62,7 +62,9 @@ jobs:
               - 👻 Ghost Mode & Privacy (Anti-Delete, Secret Media, Stealth)
               - 🤖 AI Agent (Autonomous agent, Gemini 3.5/3.1, Local LLM)
               - 🎨 Interface & Spotify-style Music Player
+              - ⚡ Auto-Updates & Releases (Direct GitHub integration, 1-tap install)
             - 🎵 Spotify-style music player redesign with dynamic album artwork gradient
+            - 🚀 In-app auto-update system with automatic checks and live download progress
           files: |
             TMessagesProj/build/outputs/apk/**/*.apk
           draft: false

@@ -208,7 +208,7 @@ public class YumiAiSettingsActivity extends UniversalFragment {
             }
         }
 
-        builder.setSingleChoiceItems(models, selectedIndex, (dialog, which) -> {
+        builder.setItems(models, (dialog, which) -> {
             if (isPrimary) {
                 YumiConfig.setAiPrimaryModel(models[which]);
             } else {
@@ -225,21 +225,18 @@ public class YumiAiSettingsActivity extends UniversalFragment {
         AlertDialog.Builder builder = new AlertDialog.Builder(getContext());
         builder.setTitle(getString(R.string.YumiAiLocalModel));
 
-        final YumiLocalAiManager.LocalModelInfo[] models = YumiLocalAiManager.AVAILABLE_MODELS;
-        String[] modelNames = new String[models.length];
+        final java.util.List<YumiLocalAiManager.LocalModelInfo> models = YumiLocalAiManager.AVAILABLE_LOCAL_MODELS;
+        CharSequence[] modelNames = new CharSequence[models.size()];
         String currentId = YumiConfig.getAiLocalModelId();
-        int selectedIndex = 0;
 
-        for (int i = 0; i < models.length; i++) {
-            boolean dl = YumiLocalAiManager.isModelDownloaded(models[i].id);
-            modelNames[i] = models[i].name + " (" + models[i].size + ")" + (dl ? " ✅" : "");
-            if (models[i].id.equals(currentId)) {
-                selectedIndex = i;
-            }
+        for (int i = 0; i < models.size(); i++) {
+            YumiLocalAiManager.LocalModelInfo m = models.get(i);
+            boolean dl = YumiLocalAiManager.isModelDownloaded(m.id);
+            modelNames[i] = m.name + " (" + m.size + ")" + (dl ? " ✅" : "");
         }
 
-        builder.setSingleChoiceItems(modelNames, selectedIndex, (dialog, which) -> {
-            YumiConfig.setAiLocalModelId(models[which].id);
+        builder.setItems(modelNames, (dialog, which) -> {
+            YumiConfig.setAiLocalModelId(models.get(which).id);
             downloadStatus = null;
             dialog.dismiss();
             updateList();
@@ -258,10 +255,10 @@ public class YumiAiSettingsActivity extends UniversalFragment {
         downloadStatus = "⏳ 0%...";
         updateList();
 
-        YumiLocalAiManager.downloadModel(getContext(), info.id, new YumiLocalAiManager.DownloadCallback() {
+        YumiLocalAiManager.downloadModel(info.id, new YumiLocalAiManager.DownloadProgressCallback() {
             @Override
-            public void onProgress(float progress, long downloadedBytes, long totalBytes) {
-                downloadStatus = "⏳ " + (int) (progress * 100) + "% (" + (downloadedBytes / (1024 * 1024)) + "/" + (totalBytes / (1024 * 1024)) + " MB)";
+            public void onProgress(int percent, long downloadedBytes, long totalBytes) {
+                downloadStatus = "⏳ " + percent + "% (" + (downloadedBytes / (1024 * 1024)) + "/" + (totalBytes / (1024 * 1024)) + " MB)";
                 updateList();
             }
 

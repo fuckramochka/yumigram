@@ -25,6 +25,7 @@ public class YumiSettingsActivity extends UniversalFragment {
     private static final int ID_MENU_GHOST = 1;
     private static final int ID_MENU_AI = 2;
     private static final int ID_MENU_INTERFACE = 3;
+    private static final int ID_MENU_UPDATE = 4;
 
     @Override
     protected CharSequence getTitle() {
@@ -68,7 +69,10 @@ public class YumiSettingsActivity extends UniversalFragment {
         // 3. Interface & Spotify Player Hub
         items.add(UItem.asButton(ID_MENU_INTERFACE, R.drawable.player_new_repeatall, getString(R.string.YumiMenuInterface), getString(R.string.YumiMenuInterfaceSubtitle)));
 
-        items.add(UItem.asShadow("Yumigram v13.2.2 • " + getString(R.string.YumiSettingsInfo)));
+        // 4. Auto-Updates & Releases Hub
+        items.add(UItem.asButton(ID_MENU_UPDATE, R.drawable.msg_download_settings, getString(R.string.YumiMenuUpdate), getString(R.string.YumiMenuUpdateSubtitle)));
+
+        items.add(UItem.asShadow("Yumigram " + org.telegram.messenger.yumigram.update.YumiUpdateManager.CURRENT_VERSION + " • " + getString(R.string.YumiSettingsInfo)));
     }
 
     @Override
@@ -82,6 +86,9 @@ public class YumiSettingsActivity extends UniversalFragment {
                 break;
             case ID_MENU_INTERFACE:
                 presentFragment(new YumiInterfaceSettingsActivity());
+                break;
+            case ID_MENU_UPDATE:
+                presentFragment(new YumiUpdateActivity());
                 break;
         }
     }

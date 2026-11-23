@@ -84,6 +84,9 @@ public class YumiConfig {
     public static final String KEY_HIDE_STORIES = "yumi_hide_stories";
     public static final String KEY_CONFIRM_VOICE_CALL = "yumi_confirm_voice_call";
 
+    // --- 8. Auto Updates ---
+    public static final String KEY_AUTO_CHECK_UPDATES = "yumi_auto_check_updates";
+
     private static SharedPreferences getPrefs() {
         if (preferences == null) {
             synchronized (YumiConfig.class) {
@@ -460,6 +463,18 @@ public class YumiConfig {
         SharedPreferences p = getPrefs();
         if (p != null) {
             p.edit().putBoolean(KEY_CONFIRM_VOICE_CALL, enabled).apply();
+        }
+    }
+
+    public static boolean isAutoCheckUpdatesEnabled() {
+        SharedPreferences p = getPrefs();
+        return p == null || p.getBoolean(KEY_AUTO_CHECK_UPDATES, true);
+    }
+
+    public static void setAutoCheckUpdatesEnabled(boolean enabled) {
+        SharedPreferences p = getPrefs();
+        if (p != null) {
+            p.edit().putBoolean(KEY_AUTO_CHECK_UPDATES, enabled).apply();
         }
     }
 }

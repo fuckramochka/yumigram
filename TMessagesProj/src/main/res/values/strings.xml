@@ -64,6 +64,10 @@
     <string name="YumiSpotifyPlayerInfo">Redesigns audio player with prominent album cover, circular controls and Spotify aesthetic</string>
     <string name="YumiSpotifyDynamicColor">Dynamic Album Colors</string>
     <string name="YumiSpotifyDynamicColorInfo">Player background smoothly adapts to the dominant color of the playing track</string>
+    <string name="YumiEnhancedPlayer">Enhanced Media Player</string>
+    <string name="YumiEnhancedPlayerInfo">Extended speeds, pitch controls and sleep timer</string>
+    <string name="YumiEqualizer">Equalizer</string>
+    <string name="YumiCloudApiKeyNotSet">Not configured (tap to set)</string>
     <string name="YumiHideStories">Hide Stories from Chat List</string>
     <string name="YumiHideStoriesInfo">Removes stories bar from the top of your chats for maximum minimalism</string>
     <string name="YumiHideSponsored">Hide Sponsored &amp; Ads Messages</string>
@@ -72,6 +76,24 @@
     <string name="YumiConfirmVoiceCallInfo">Shows confirmation dialog before placing voice and video calls</string>
     <string name="YumiAiInputHint">Ask AI Agent or give a command…</string>
     <string name="YumiAiGreeting">Hello! I am your personal Yumi Copilot AI Agent ✨\n\nI can:\n• Summarize any chat or channel\n• Read discussions and find answers\n• Send messages for you («Write to [Name]: [Text]»)\n• Answer questions and translate text.</string>
+    <!-- Yumigram Auto-Updates -->
+    <string name="YumiMenuUpdate">Updates &amp; Releases</string>
+    <string name="YumiMenuUpdateSubtitle">Auto-update, check GitHub releases and install</string>
+    <string name="YumiUpdateAutoCheck">Auto-Check for Updates</string>
+    <string name="YumiUpdateAutoCheckInfo">Automatically check for green builds on GitHub</string>
+    <string name="YumiUpdateCheckButton">Check for Updates</string>
+    <string name="YumiUpdateChecking">Checking for updates…</string>
+    <string name="YumiUpdateAvailable">Update Available!</string>
+    <string name="YumiUpdateAvailableDetails">Yumigram %1$s is available</string>
+    <string name="YumiUpdateLatest">You are on the latest version</string>
+    <string name="YumiUpdateLatestInfo">Yumigram is up to date (%1$s)</string>
+    <string name="YumiUpdateDownloadInstall">Download &amp; Install (%1$s)</string>
+    <string name="YumiUpdateDownloading">Downloading update: %1$d%% (%2$s / %3$s)</string>
+    <string name="YumiUpdateInstallNow">Install Update</string>
+    <string name="YumiUpdateChangelog">What\'s new in %1$s</string>
+    <string name="YumiUpdateError">Failed to check updates: %1$s</string>
+    <string name="YumiUpdateCardHeader">Release Information</string>
+    <string name="YumiUpdateInstallPermission">Please allow Yumigram to install APKs if prompted</string>
     <string name="LanguageName">English</string>
     <string name="English">English</string>
     <string name="LanguageNameInEnglish">English</string>

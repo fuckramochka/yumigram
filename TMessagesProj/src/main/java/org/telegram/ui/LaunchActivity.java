@@ -7279,6 +7279,21 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
             showUpdateActivity(UserConfig.selectedAccount, SharedConfig.pendingAppUpdate, true);
         }
         checkAppUpdate(false, null);
+        if (org.telegram.messenger.yumigram.YumiConfig.isAutoCheckUpdatesEnabled()) {
+            org.telegram.messenger.yumigram.update.YumiUpdateManager.checkUpdate(false, (update, hasUpdate) -> {
+                if (hasUpdate && !isFinishing()) {
+                    BaseFragment fragment = getLastFragment();
+                    if (fragment != null) {
+                        BulletinFactory.of(fragment).createSimpleBulletin(
+                                R.raw.chats_infotip,
+                                LocaleController.formatString("YumiUpdateAvailableDetails", R.string.YumiUpdateAvailableDetails, update.tagName),
+                                LocaleController.getString(R.string.YumiMenuUpdate),
+                                () -> fragment.presentFragment(new YumiUpdateActivity())
+                        ).show();
+                    }
+                }
+            });
+        }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             ApplicationLoader.canDrawOverlays = Settings.canDrawOverlays(this);

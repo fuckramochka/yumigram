@@ -64,6 +64,10 @@
     <string name="YumiSpotifyPlayerInfo">Перетворює аудіоплеєр: велика обкладинка, круглі кнопки керування та стиль Spotify</string>
     <string name="YumiSpotifyDynamicColor">Динамічні кольори обкладинки</string>
     <string name="YumiSpotifyDynamicColorInfo">Фон плеєра плавно адаптується до переважаючого кольору обкладинки поточної пісні</string>
+    <string name="YumiEnhancedPlayer">Розширений медіаплеєр</string>
+    <string name="YumiEnhancedPlayerInfo">Розширені швидкості відтворення та таймер сну</string>
+    <string name="YumiEqualizer">Еквалайзер звуку</string>
+    <string name="YumiCloudApiKeyNotSet">Не налаштовано (натисніть, щоб додати)</string>
     <string name="YumiHideStories">Приховати історії зі списку чатів</string>
     <string name="YumiHideStoriesInfo">Прибирає панель історій зверху списку чатів для чистоти простору</string>
     <string name="YumiHideSponsored">Приховувати рекламу та спонсорів</string>
@@ -72,6 +76,24 @@
     <string name="YumiConfirmVoiceCallInfo">Запитувати підтвердження перед викликом, щоб уникнути випадкових натискань</string>
     <string name="YumiAiInputHint">Запитайте ШІ Агента або дайте команду…</string>
     <string name="YumiAiGreeting">Привіт! Я твій особистий ШІ Агент Yumi Copilot ✨\n\nЯ можу:\n• Переказати будь-який твій чат або канал\n• Прочитати бесіду та знайти відповіді\n• Написати повідомлення за тебе («Напиши [Ім\'я]: [Текст]»)\n• Відповісти на будь-яке запитання та перекладати текст.</string>
+    <!-- Yumigram Auto-Updates -->
+    <string name="YumiMenuUpdate">Оновлення та Релізи</string>
+    <string name="YumiMenuUpdateSubtitle">Автооновлення, перевірка релізів GitHub та встановлення</string>
+    <string name="YumiUpdateAutoCheck">Автоматична перевірка оновлень</string>
+    <string name="YumiUpdateAutoCheckInfo">Автоматично перевіряти нові зелені білди на GitHub</string>
+    <string name="YumiUpdateCheckButton">Перевірити наявність оновлень</string>
+    <string name="YumiUpdateChecking">Перевірка оновлень…</string>
+    <string name="YumiUpdateAvailable">Доступне оновлення!</string>
+    <string name="YumiUpdateAvailableDetails">Доступна нова версія Yumigram %1$s</string>
+    <string name="YumiUpdateLatest">У вас встановлена найновіша версія</string>
+    <string name="YumiUpdateLatestInfo">Yumigram оновлено до актуальної версії (%1$s)</string>
+    <string name="YumiUpdateDownloadInstall">Завантажити та встановити (%1$s)</string>
+    <string name="YumiUpdateDownloading">Завантаження оновлення: %1$d%% (%2$s / %3$s)</string>
+    <string name="YumiUpdateInstallNow">Встановити оновлення</string>
+    <string name="YumiUpdateChangelog">Що нового у %1$s</string>
+    <string name="YumiUpdateError">Помилка перевірки оновлень: %1$s</string>
+    <string name="YumiUpdateCardHeader">Інформація про реліз</string>
+    <string name="YumiUpdateInstallPermission">Будь ласка, дозвольте встановлення додатків для Yumigram</string>
     <string name="LanguageName">Українська</string>
     <string name="English">Англійська</string>
     <string name="LanguageNameInEnglish">Ukrainian</string>
