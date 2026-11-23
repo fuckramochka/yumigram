@@ -341,10 +341,13 @@ public class YumiAiCopilotActivity extends BaseFragment {
 
             // Copy on long-click
             holder.textView.setOnLongClickListener(v -> {
-                ClipboardManager cm = (ClipboardManager) parentActivity.getSystemService(Context.CLIPBOARD_SERVICE);
-                if (cm != null) {
-                    cm.setPrimaryClip(ClipData.newPlainText("Yumi AI", entry.text));
-                    BulletinFactory.of(YumiAiCopilotActivity.this).createSimpleBulletin(R.raw.chats_infotip, "Текст скопійовано").show();
+                Context ctx = getParentActivity() != null ? getParentActivity() : ApplicationLoader.applicationContext;
+                if (ctx != null) {
+                    ClipboardManager cm = (ClipboardManager) ctx.getSystemService(Context.CLIPBOARD_SERVICE);
+                    if (cm != null) {
+                        cm.setPrimaryClip(ClipData.newPlainText("Yumi AI", entry.text));
+                        BulletinFactory.of(YumiAiCopilotActivity.this).createSimpleBulletin(R.raw.chats_infotip, "Текст скопійовано").show();
+                    }
                 }
                 return true;
             });
