@@ -27,7 +27,7 @@ public class YumiLocale {
         try {
             Locale targetLocale = null;
             if (LocaleController.getInstance() != null) {
-                targetLocale = LocaleController.getInstance().currentLocale;
+                targetLocale = LocaleController.getInstance().getCurrentLocale();
             }
             if (targetLocale == null) {
                 targetLocale = Locale.getDefault();
@@ -48,7 +48,7 @@ public class YumiLocale {
             String format = getString(resId);
             Locale targetLocale = null;
             if (LocaleController.getInstance() != null) {
-                targetLocale = LocaleController.getInstance().currentLocale;
+                targetLocale = LocaleController.getInstance().getCurrentLocale();
             }
             if (targetLocale != null) {
                 return String.format(targetLocale, format, args);
