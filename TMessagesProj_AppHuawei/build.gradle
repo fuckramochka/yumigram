@@ -3,8 +3,9 @@ apply plugin: 'com.huawei.agconnect'
 apply plugin: 'org.telegram.build-app-plugin'
 
 repositories {
-    mavenCentral()
     google()
+    maven { url 'https://maven-central.storage-download.googleapis.com/maven2/' }
+    maven { url 'https://repo1.maven.org/maven2/' }
     maven { url 'https://developer.huawei.com/repo/' }
 }
 

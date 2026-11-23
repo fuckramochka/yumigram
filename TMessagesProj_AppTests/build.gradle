@@ -2,7 +2,8 @@
 buildscript {
     repositories {
         google()
-        mavenCentral()
+        maven { url 'https://maven-central.storage-download.googleapis.com/maven2/' }
+        maven { url 'https://repo1.maven.org/maven2/' }
     }
     dependencies {
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.0"
@@ -15,8 +16,9 @@ apply plugin: 'test-generator'
 apply plugin: 'org.telegram.build-app-plugin'
 
 repositories {
-    mavenCentral()
     google()
+    maven { url 'https://maven-central.storage-download.googleapis.com/maven2/' }
+    maven { url 'https://repo1.maven.org/maven2/' }
 }
 
 configurations {
