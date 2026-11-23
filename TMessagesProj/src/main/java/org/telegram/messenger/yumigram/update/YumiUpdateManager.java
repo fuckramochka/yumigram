@@ -38,7 +38,7 @@ import java.net.URL;
 public class YumiUpdateManager {
 
     private static final String TAG = "YumiUpdateManager";
-    public static final String CURRENT_VERSION = "v1.0.24";
+    public static final String CURRENT_VERSION = "v1.0.25";
     public static final String GITHUB_REPO = "fuckramochka/yumigram";
     public static final String GITHUB_API_URL = "https://api.github.com/repos/" + GITHUB_REPO + "/releases/latest";
 

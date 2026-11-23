@@ -355,4 +355,12 @@
     <string name="RemindTodayAt">\'Отправить сегодня в\' HH:mm</string>
     <string name="RemindDayAt">\'Отправить\' d MMM \'в\' HH:mm</string>
     <string name="RemindDayYearAt">\'Напомнить\' d MMM yyyy \'в\' HH:mm</string>
+    <string name="ProfilePlaylistTitleMine">Ваш плейлист</string>
+    <string name="ProfilePlaylistTitle">Плейлист %s</string>
+    <string name="AudioAddToProfile">Добавить в профиль</string>
+    <string name="AudioRemoveFromProfile">Удалить из профиля</string>
+    <string name="AudioSaveToMyProfileSaved">Сохранено в вашем профиле</string>
+    <string name="AudioSaveToMyProfileUnsaved">Удалено из вашего профиля</string>
+    <string name="StoryAudioAddToProfile">Добавить в профиль</string>
+    <string name="StoryAudioAddToProfileToast">Добавлено в профиль.</string>
 </resources>

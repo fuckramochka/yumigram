@@ -40,6 +40,7 @@ import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
+import org.telegram.messenger.yumigram.YumiConfig;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.ActionBar.ThemeBind;
@@ -118,7 +119,11 @@ public class AudioPlayerCell extends FrameLayout implements DownloadController.F
         });
 
         radialProgress = new RadialProgress2(this, resourcesProvider);
-        radialProgress.setColorKeys(Theme.key_chat_inLoader, Theme.key_chat_inLoaderSelected, Theme.key_chat_inMediaIcon, Theme.key_chat_inMediaIconSelected);
+        if (YumiConfig.isSpotifyPlayerEnabled() || Theme.isCurrentThemeDark()) {
+            radialProgress.setColors(0xFF282828, 0xFF383838, 0xFF1DB954, 0xFF1ED760);
+        } else {
+            radialProgress.setColorKeys(Theme.key_chat_inLoader, Theme.key_chat_inLoaderSelected, Theme.key_chat_inMediaIcon, Theme.key_chat_inMediaIconSelected);
+        }
         TAG = DownloadController.getInstance(currentAccount).generateObserverTag();
         setFocusable(true);
 
@@ -193,12 +198,19 @@ public class AudioPlayerCell extends FrameLayout implements DownloadController.F
         final TLRPC.PhotoSize thumb = document != null ? FileLoader.getClosestPhotoSizeWithSize(document.thumbs, 90) : null;
         if (thumb instanceof TLRPC.TL_photoSize || thumb instanceof TLRPC.TL_photoSizeProgressive) {
             radialProgress.setImageOverlay(thumb, document, messageObject);
+            radialProgress.setColorKeys(Theme.key_chat_inLoader, Theme.key_chat_inLoaderSelected, Theme.key_chat_inMediaIcon, Theme.key_chat_inMediaIconSelected);
         } else {
             final String artworkUrl = messageObject.getArtworkUrl(true);
             if (!TextUtils.isEmpty(artworkUrl)) {
                 radialProgress.setImageOverlay(artworkUrl);
+                radialProgress.setColorKeys(Theme.key_chat_inLoader, Theme.key_chat_inLoaderSelected, Theme.key_chat_inMediaIcon, Theme.key_chat_inMediaIconSelected);
             } else {
                 radialProgress.setImageOverlay(null, null, null);
+                if (YumiConfig.isSpotifyPlayerEnabled() || Theme.isCurrentThemeDark()) {
+                    radialProgress.setColors(0xFF282828, 0xFF383838, 0xFF1DB954, 0xFF1ED760);
+                } else {
+                    radialProgress.setColorKeys(Theme.key_chat_inLoader, Theme.key_chat_inLoaderSelected, Theme.key_chat_inMediaIcon, Theme.key_chat_inMediaIconSelected);
+                }
             }
         }
         requestLayout();

@@ -368,4 +368,12 @@
     <string name="RemindTodayAt">\'Нагадати сьогодні,\' HH:mm</string>
     <string name="RemindDayAt">\'Нагадати\' d MMM\',\' HH:mm</string>
     <string name="RemindDayYearAt">\'Нагадати\' d MMM yyyy\',\' HH:mm</string>
+    <string name="ProfilePlaylistTitleMine">Ваш плейлист</string>
+    <string name="ProfilePlaylistTitle">Плейлист %s</string>
+    <string name="AudioAddToProfile">Додати до профілю</string>
+    <string name="AudioRemoveFromProfile">Видалити з профілю</string>
+    <string name="AudioSaveToMyProfileSaved">Збережено у вашому профілі</string>
+    <string name="AudioSaveToMyProfileUnsaved">Видалено з вашого профілю</string>
+    <string name="StoryAudioAddToProfile">Додати до профілю</string>
+    <string name="StoryAudioAddToProfileToast">Додано до профілю.</string>
 </resources>

@@ -58,6 +58,8 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+
+import org.telegram.messenger.yumigram.util.YumiLocale;
 import androidx.core.content.FileProvider;
 import androidx.core.graphics.ColorUtils;
 import androidx.dynamicanimation.animation.FloatValueHolder;
@@ -764,11 +766,24 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
         FrameLayout bottomView = new FrameLayout(context) {
             @Override
             protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
-                int dist = ((right - left) - dp(8 + 48 * 5)) / 4;
+                int totalWidth = (right - left);
+                int totalButtonsWidth = 0;
                 for (int a = 0; a < 5; a++) {
-                    int l = dp(4 + 48 * a) + dist * a;
-                    int t = dp(9);
-                    buttons[a].layout(l, t, l + buttons[a].getMeasuredWidth(), t + buttons[a].getMeasuredHeight());
+                    if (buttons[a] != null) {
+                        totalButtonsWidth += buttons[a].getMeasuredWidth();
+                    }
+                }
+                int dist = ((totalWidth - dp(8)) - totalButtonsWidth) / 4;
+                int curLeft = dp(4);
+                int h = (bottom - top);
+                for (int a = 0; a < 5; a++) {
+                    if (buttons[a] != null) {
+                        int bw = buttons[a].getMeasuredWidth();
+                        int bh = buttons[a].getMeasuredHeight();
+                        int t = (h - bh) / 2;
+                        buttons[a].layout(curLeft, t, curLeft + bw, t + bh);
+                        curLeft += bw + dist;
+                    }
                 }
             }
         };
@@ -1255,7 +1270,7 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
         SpannableStringBuilder sb = new SpannableStringBuilder();
         sb.append("+ ");
         sb.setSpan(new ColoredImageSpan(R.drawable.filled_track_add), 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        sb.append(getString(R.string.AudioAddToProfile));
+        sb.append(YumiLocale.getString(R.string.AudioAddToProfile));
         saveToProfileButton.setText(sb);
         saveToProfileButton.setOnClickListener(v -> {
             final MessageObject messageObject1 = MediaController.getInstance().getPlayingMessageObject();
@@ -1265,13 +1280,13 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
             saveToProfile(messageObject1, true, () -> {}, false);
             setVisibleInProfile(true);
             BulletinFactory.of((FrameLayout) containerView, resourcesProvider)
-                .createSimpleBulletin(R.raw.saved_messages, getString(R.string.AudioSaveToMyProfileSaved))
+                .createSimpleBulletin(R.raw.saved_messages, YumiLocale.getString(R.string.AudioSaveToMyProfileSaved))
                 .show();
         });
         playerLayout.addView(saveToProfileButton, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 42, Gravity.FILL_HORIZONTAL | Gravity.BOTTOM, 12, 12, 12, 12));
 
         unsaveFromProfileButton = new ButtonWithCounterView(context, resourcesProvider).setRound().setNeutral();
-        unsaveFromProfileButton.setText(getString(R.string.AudioRemoveFromProfile));
+        unsaveFromProfileButton.setText(YumiLocale.getString(R.string.AudioRemoveFromProfile));
         unsaveFromProfileButton.setOnClickListener(v -> {
             final MessageObject messageObject1 = MediaController.getInstance().getPlayingMessageObject();
             if (messageObject1 == null || parentActivity == null) {
@@ -1280,7 +1295,7 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
             saveToProfile(messageObject1, false, () -> {}, false);
             setVisibleInProfile(false);
             BulletinFactory.of((FrameLayout) containerView, resourcesProvider)
-                .createSimpleBulletin(R.raw.ic_delete, getString(R.string.AudioSaveToMyProfileUnsaved))
+                .createSimpleBulletin(R.raw.ic_delete, YumiLocale.getString(R.string.AudioSaveToMyProfileUnsaved))
                 .show();
         });
         playerLayout.addView(unsaveFromProfileButton, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 42, Gravity.FILL_HORIZONTAL | Gravity.BOTTOM, 12, 12, 12, 12));
@@ -1355,9 +1370,9 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
         actionBar.setTitle(LocaleController.getString(R.string.AttachMusic));
         if (savedMusicList != null) {
             if (savedMusicList.dialogId == UserConfig.getInstance(currentAccount).getClientUserId()) {
-                actionBar.setTitle(getString(R.string.ProfilePlaylistTitleMine));
+                actionBar.setTitle(YumiLocale.getString(R.string.ProfilePlaylistTitleMine));
             } else {
-                actionBar.setTitle(formatString(R.string.ProfilePlaylistTitle, DialogObject.getShortName(savedMusicList.dialogId)));
+                actionBar.setTitle(YumiLocale.formatString("ProfilePlaylistTitle", R.string.ProfilePlaylistTitle, DialogObject.getShortName(savedMusicList.dialogId)));
             }
         } else if (messageObject != null && !MediaController.getInstance().currentPlaylistIsGlobalSearch()) {
             long did = messageObject.getDialogId();
@@ -3225,7 +3240,7 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
                         onImageUpdated(imageReceiver);
                     }
                 });
-                imageViews[i].setRoundRadius(dp(4));
+                imageViews[i].setRoundRadius(dp(org.telegram.messenger.yumigram.YumiConfig.isSpotifyPlayerEnabled() ? 8 : 4));
                 if (i == 1) {
                     imageViews[i].setVisibility(GONE);
                 }
