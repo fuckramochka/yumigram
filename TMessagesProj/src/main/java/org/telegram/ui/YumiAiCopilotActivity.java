@@ -2,6 +2,8 @@ package org.telegram.ui;
 
 import static org.telegram.messenger.AndroidUtilities.dp;
 
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
@@ -12,42 +14,66 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
 import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.ApplicationLoader;
+import org.telegram.messenger.FileLog;
 import org.telegram.messenger.LocaleController;
-import org.telegram.messenger.MessageObject;
-import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.R;
-import org.telegram.messenger.SendMessagesHelper;
-import org.telegram.messenger.yumigram.ai.YumiAiManager;
-import org.telegram.tgnet.TLRPC;
+import org.telegram.messenger.yumigram.ai.YumiAgentEngine;
+import org.telegram.messenger.yumigram.util.YumiLocale;
 import org.telegram.ui.ActionBar.ActionBar;
+import org.telegram.ui.ActionBar.ActionBarMenu;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
+import org.telegram.ui.Components.BulletinFactory;
 import org.telegram.ui.Components.LayoutHelper;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 
 /**
- * Interactive AI Copilot Chat for Yumigram (Юмиграм).
- * Can chat, summarize dialogues, read chats, and draft/send messages on user request.
+ * Modern AI Agent Copilot Chat for Yumigram.
+ * - Powered by autonomous YumiAgentEngine (Telegram tools, reasoning, smart actions)
+ * - Persistent chat history saved to disk
+ * - Telegram-native bubble styling with copy/share
+ * - Quick prompt suggestion chips
+ * - Clear history action
  */
 public class YumiAiCopilotActivity extends BaseFragment {
 
+    private static final String HISTORY_FILE = "yumi_agent_chat.json";
+    private static final int MENU_CLEAR = 1;
+
     public static class ChatEntry {
         public final boolean isAi;
-        public final String text;
+        public String text;
+        public boolean isThinking;
 
         public ChatEntry(boolean isAi, String text) {
+            this(isAi, text, false);
+        }
+
+        public ChatEntry(boolean isAi, String text, boolean isThinking) {
             this.isAi = isAi;
             this.text = text;
+            this.isThinking = isThinking;
         }
     }
 
@@ -56,18 +82,25 @@ public class YumiAiCopilotActivity extends BaseFragment {
     private ChatAdapter adapter;
     private EditText inputEditText;
     private ImageView sendButton;
+    private boolean isAgentWorking = false;
 
     @Override
     public View createView(Context context) {
         actionBar.setBackButtonImage(R.drawable.ic_ab_back);
         actionBar.setAllowOverlayTitle(true);
-        actionBar.setTitle("Yumi Copilot ✨");
-        actionBar.setSubtitle(LocaleController.getString(R.string.YumiSectionAI));
+        actionBar.setTitle("Yumi Agent ✨");
+        actionBar.setSubtitle("Autonomous Telegram AI");
+
+        ActionBarMenu menu = actionBar.createMenu();
+        menu.addItem(MENU_CLEAR, R.drawable.msg_delete);
+
         actionBar.setActionBarMenuOnItemClick(new ActionBar.ActionBarMenuOnItemClick() {
             @Override
             public void onItemClick(int id) {
                 if (id == -1) {
                     finishFragment();
+                } else if (id == MENU_CLEAR) {
+                    clearChatHistory();
                 }
             }
         });
@@ -76,23 +109,46 @@ public class YumiAiCopilotActivity extends BaseFragment {
         root.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundGray));
         fragmentView = root;
 
+        // Load saved chat history
+        loadChatHistory();
+
+        // Chat RecyclerView
         recyclerView = new RecyclerView(context);
         LinearLayoutManager layoutManager = new LinearLayoutManager(context);
         layoutManager.setStackFromEnd(true);
         recyclerView.setLayoutManager(layoutManager);
         adapter = new ChatAdapter();
         recyclerView.setAdapter(adapter);
-        root.addView(recyclerView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.TOP, 0, 0, 0, 60));
+        root.addView(recyclerView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.TOP, 0, 0, 0, 104));
 
-        // Bottom Input Container
+        // Bottom panel container (Chips + Input)
+        LinearLayout bottomPanel = new LinearLayout(context);
+        bottomPanel.setOrientation(LinearLayout.VERTICAL);
+        bottomPanel.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
+
+        // Quick Suggestion Chips
+        HorizontalScrollView chipsScroll = new HorizontalScrollView(context);
+        chipsScroll.setHorizontalScrollBarEnabled(false);
+        LinearLayout chipsLayout = new LinearLayout(context);
+        chipsLayout.setOrientation(LinearLayout.HORIZONTAL);
+        chipsLayout.setPadding(dp(10), dp(6), dp(10), dp(4));
+
+        addChip(chipsLayout, "✨ Підсумувати чати", "Підсумуй мої останні активні чати");
+        addChip(chipsLayout, "✍️ Скласти повідомлення", "Напиши ввічливу відповідь");
+        addChip(chipsLayout, "🔍 Знайти в повідомленнях", "Знайди важливі повідомлення за сьогодні");
+        addChip(chipsLayout, "🌐 Перекласти", "Переклади текст українською:");
+
+        chipsScroll.addView(chipsLayout);
+        bottomPanel.addView(chipsScroll, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+
+        // Input bar
         LinearLayout inputBar = new LinearLayout(context);
         inputBar.setOrientation(LinearLayout.HORIZONTAL);
-        inputBar.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
-        inputBar.setPadding(dp(12), dp(8), dp(12), dp(8));
+        inputBar.setPadding(dp(12), dp(4), dp(12), dp(8));
         inputBar.setGravity(Gravity.CENTER_VERTICAL);
 
         inputEditText = new EditText(context);
-        inputEditText.setHint(LocaleController.getString(R.string.YumiAiInputHint));
+        inputEditText.setHint(YumiLocale.getString(R.string.YumiAiInputHint));
         inputEditText.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
         inputEditText.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
         inputEditText.setHintTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteHintText));
@@ -106,153 +162,141 @@ public class YumiAiCopilotActivity extends BaseFragment {
         sendButton.setOnClickListener(v -> sendMessage());
         inputBar.addView(sendButton, LayoutHelper.createLinear(40, 40));
 
-        root.addView(inputBar, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 60, Gravity.BOTTOM));
+        bottomPanel.addView(inputBar, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 52));
+        root.addView(bottomPanel, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.BOTTOM));
 
-        // Welcome greeting
+        // Welcome greeting if fresh
         if (messages.isEmpty()) {
-            messages.add(new ChatEntry(true, LocaleController.getString(R.string.YumiAiGreeting)));
+            messages.add(new ChatEntry(true, YumiLocale.getString(R.string.YumiAiGreeting)));
+            saveChatHistory();
             adapter.notifyDataSetChanged();
         }
 
         return fragmentView;
     }
 
+    private void addChip(LinearLayout parent, String title, String prompt) {
+        TextView chip = new TextView(parent.getContext());
+        chip.setText(title);
+        chip.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12);
+        chip.setTextColor(Theme.getColor(Theme.key_chat_messageLinkIn));
+        chip.setPadding(dp(10), dp(5), dp(10), dp(5));
+
+        GradientDrawable bg = new GradientDrawable();
+        bg.setCornerRadius(dp(14));
+        bg.setColor(Theme.getColor(Theme.key_windowBackgroundGray));
+        bg.setStroke(dp(1), Theme.getColor(Theme.key_divider));
+        chip.setBackground(bg);
+
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.rightMargin = dp(6);
+        chip.setLayoutParams(lp);
+
+        chip.setOnClickListener(v -> {
+            inputEditText.setText(prompt);
+            inputEditText.setSelection(prompt.length());
+        });
+
+        parent.addView(chip);
+    }
+
     private void sendMessage() {
+        if (isAgentWorking) return;
+
         String text = inputEditText.getText().toString().trim();
         if (TextUtils.isEmpty(text)) return;
         inputEditText.setText("");
 
         messages.add(new ChatEntry(false, text));
-        adapter.notifyItemInserted(messages.size() - 1);
-        recyclerView.scrollToPosition(messages.size() - 1);
+        int userPos = messages.size() - 1;
+        adapter.notifyItemInserted(userPos);
 
-        processUserQuery(text);
-    }
+        // Add thinking placeholder
+        ChatEntry thinkingEntry = new ChatEntry(true, "✨ Yumi Agent аналізує...", true);
+        messages.add(thinkingEntry);
+        int thinkingPos = messages.size() - 1;
+        adapter.notifyItemInserted(thinkingPos);
+        recyclerView.scrollToPosition(thinkingPos);
 
-    private void processUserQuery(String query) {
-        String lower = query.toLowerCase();
+        isAgentWorking = true;
 
-        // Check if query is a request to send a message (UK/EN/RU)
-        if (lower.startsWith("напиши ") || lower.startsWith("відправ ") || lower.startsWith("send ") || lower.startsWith("write ") || lower.startsWith("отправь ")) {
-            if (!org.telegram.messenger.yumigram.YumiConfig.isAiAgentSendMessagesEnabled()) {
-                messages.add(new ChatEntry(true, "⚠️ AI Agent message sending is disabled in Yumigram AI Settings."));
-                adapter.notifyItemInserted(messages.size() - 1);
-                return;
-            }
-            handleSendRequest(query);
-            return;
-        }
-
-        // Check if query is a request to read a chat (UK/EN/RU)
-        if (lower.startsWith("прочитай ") || lower.startsWith("що в чаті ") || lower.startsWith("read ") || lower.startsWith("summarize ") || lower.startsWith("что в чате ")) {
-            if (!org.telegram.messenger.yumigram.YumiConfig.isAiAgentReadChatEnabled()) {
-                messages.add(new ChatEntry(true, "⚠️ AI Agent chat reading is disabled in Yumigram AI Settings."));
-                adapter.notifyItemInserted(messages.size() - 1);
-                return;
-            }
-            handleReadRequest(query);
-            return;
-        }
-
-        // Standard AI generation
-        StringBuilder contextBuilder = new StringBuilder();
-        contextBuilder.append("You are Yumigram's advanced AI Copilot Agent in Telegram. Be helpful, concise, friendly, and act with full awareness of your assistant capabilities.\n\nUser asks: ").append(query);
-
-        YumiAiManager.requestAi(contextBuilder.toString(), new YumiAiManager.AiCallback() {
+        YumiAgentEngine.executePrompt(text, new YumiAgentEngine.AgentCallback() {
             @Override
-            public void onSuccess(String result) {
-                messages.add(new ChatEntry(true, result));
-                adapter.notifyItemInserted(messages.size() - 1);
-                recyclerView.scrollToPosition(messages.size() - 1);
+            public void onResponse(String agentResponse) {
+                AndroidUtilities.runOnUIThread(() -> {
+                    isAgentWorking = false;
+                    thinkingEntry.text = agentResponse;
+                    thinkingEntry.isThinking = false;
+                    adapter.notifyItemChanged(thinkingPos);
+                    saveChatHistory();
+                    recyclerView.scrollToPosition(messages.size() - 1);
+                });
             }
 
             @Override
-            public void onError(String errorMessage) {
-                messages.add(new ChatEntry(true, "⚠️ Error: " + errorMessage));
-                adapter.notifyItemInserted(messages.size() - 1);
-                recyclerView.scrollToPosition(messages.size() - 1);
+            public void onError(String error) {
+                AndroidUtilities.runOnUIThread(() -> {
+                    isAgentWorking = false;
+                    thinkingEntry.text = "⚠️ Помилка агента: " + error;
+                    thinkingEntry.isThinking = false;
+                    adapter.notifyItemChanged(thinkingPos);
+                    saveChatHistory();
+                    recyclerView.scrollToPosition(messages.size() - 1);
+                });
             }
         });
     }
 
-    private void handleSendRequest(String query) {
-        // e.g.: "напиши Тарасу: привіт" or "write to John: hello"
-        String[] parts = query.split(":", 2);
-        if (parts.length < 2) {
-            messages.add(new ChatEntry(true, "Please specify recipient and message separated by a colon, e.g.:\n«Write to [Name]: [Message]» or «Напиши [Ім'я]: [Текст]»"));
-            adapter.notifyItemInserted(messages.size() - 1);
-            return;
-        }
-
-        String targetName = parts[0].replaceFirst("(?i)(напиши|відправ|send|write to|write|отправь)\\s*", "").trim();
-        String messageBody = parts[1].trim();
-
-        TLRPC.User foundUser = findUserByName(targetName);
-        if (foundUser != null) {
-            SendMessagesHelper.getInstance(currentAccount).sendMessage(
-                    SendMessagesHelper.SendMessageParams.of(messageBody, foundUser.id)
-            );
-            messages.add(new ChatEntry(true, "✅ Повідомлення успішно надіслано для " + foundUser.first_name + ":\n\"" + messageBody + "\""));
-        } else {
-            messages.add(new ChatEntry(true, "Не вдалося знайти користувача з іменем «" + targetName + "» у ваших чатах. Спробуйте уточнити точне ім'я."));
-        }
-        adapter.notifyItemInserted(messages.size() - 1);
-        recyclerView.scrollToPosition(messages.size() - 1);
+    private void clearChatHistory() {
+        messages.clear();
+        messages.add(new ChatEntry(true, YumiLocale.getString(R.string.YumiAiGreeting)));
+        adapter.notifyDataSetChanged();
+        saveChatHistory();
+        BulletinFactory.of(this).createSimpleBulletin(R.raw.chats_infotip, "Історію чату очищено").show();
     }
 
-    private void handleReadRequest(String query) {
-        String targetName = query.replaceFirst("(?i)(прочитай|що в чаті|read|summarize|что в чате)\\s*", "").trim();
-        TLRPC.User foundUser = findUserByName(targetName);
+    private void loadChatHistory() {
+        messages.clear();
+        File file = new File(ApplicationLoader.applicationContext.getFilesDir(), HISTORY_FILE);
+        if (!file.exists()) return;
 
-        if (foundUser != null) {
-            messages.add(new ChatEntry(true, "📖 Читаю останні повідомлення з чату " + foundUser.first_name + "...\n(Аналізую вміст за допомогою ШІ)"));
-            adapter.notifyItemInserted(messages.size() - 1);
-
-            ArrayList<MessageObject> msgList = MessagesController.getInstance(currentAccount).dialogMessage.get(foundUser.id);
-            if (msgList != null && !msgList.isEmpty()) {
-                YumiAiManager.summarizeMessages(msgList, new YumiAiManager.AiCallback() {
-                    @Override
-                    public void onSuccess(String result) {
-                        AndroidUtilities.runOnUIThread(() -> {
-                            messages.add(new ChatEntry(true, "📖 Стислий зміст чату " + foundUser.first_name + ":\n\n" + result));
-                            adapter.notifyItemInserted(messages.size() - 1);
-                            recyclerView.scrollToPosition(messages.size() - 1);
-                        });
-                    }
-
-                    @Override
-                    public void onError(String errorMessage) {
-                        AndroidUtilities.runOnUIThread(() -> {
-                            messages.add(new ChatEntry(true, "⚠️ Помилка аналізу повідомлень: " + errorMessage));
-                            adapter.notifyItemInserted(messages.size() - 1);
-                            recyclerView.scrollToPosition(messages.size() - 1);
-                        });
-                    }
-                });
-            } else {
-                messages.add(new ChatEntry(true, "Не знайдено завантажених повідомлень у чаті з " + foundUser.first_name + ". Відкрийте цей чат, щоб синхронізувати його."));
-                adapter.notifyItemInserted(messages.size() - 1);
-                recyclerView.scrollToPosition(messages.size() - 1);
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))) {
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                sb.append(line);
             }
-        } else {
-            messages.add(new ChatEntry(true, "Чат з «" + targetName + "» не знайдено серед ваших діалогів."));
-            adapter.notifyItemInserted(messages.size() - 1);
+            JSONArray arr = new JSONArray(sb.toString());
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject obj = arr.getJSONObject(i);
+                messages.add(new ChatEntry(obj.optBoolean("isAi"), obj.optString("text")));
+            }
+        } catch (Exception e) {
+            FileLog.e(e);
         }
     }
 
-    private TLRPC.User findUserByName(String name) {
-        if (TextUtils.isEmpty(name)) return null;
-        String search = name.toLowerCase();
-        for (int a = 0; a < MessagesController.getInstance(currentAccount).dialogs_dict.size(); a++) {
-            long did = MessagesController.getInstance(currentAccount).dialogs_dict.keyAt(a);
-            if (did > 0) {
-                TLRPC.User u = MessagesController.getInstance(currentAccount).getUser(did);
-                if (u != null && u.first_name != null && u.first_name.toLowerCase().contains(search)) {
-                    return u;
-                }
+    private void saveChatHistory() {
+        try {
+            JSONArray arr = new JSONArray();
+            // Store up to recent 60 messages
+            int start = Math.max(0, messages.size() - 60);
+            for (int i = start; i < messages.size(); i++) {
+                ChatEntry e = messages.get(i);
+                if (e.isThinking) continue;
+                JSONObject obj = new JSONObject();
+                obj.put("isAi", e.isAi);
+                obj.put("text", e.text);
+                arr.put(obj);
             }
+
+            File file = new File(ApplicationLoader.applicationContext.getFilesDir(), HISTORY_FILE);
+            try (FileOutputStream fos = new FileOutputStream(file)) {
+                fos.write(arr.toString().getBytes(StandardCharsets.UTF_8));
+            }
+        } catch (Exception e) {
+            FileLog.e(e);
         }
-        return null;
     }
 
     private class ChatAdapter extends RecyclerView.Adapter<ChatViewHolder> {
@@ -261,10 +305,11 @@ public class YumiAiCopilotActivity extends BaseFragment {
         public ChatViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
             FrameLayout frame = new FrameLayout(parent.getContext());
             frame.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-            frame.setPadding(dp(12), dp(4), dp(12), dp(4));
+            frame.setPadding(dp(14), dp(4), dp(14), dp(4));
 
             TextView textView = new TextView(parent.getContext());
             textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
+            textView.setLineSpacing(dp(2), 1.0f);
             textView.setPadding(dp(14), dp(10), dp(14), dp(10));
             frame.addView(textView);
 
@@ -284,12 +329,25 @@ public class YumiAiCopilotActivity extends BaseFragment {
                 lp.gravity = Gravity.LEFT;
                 holder.textView.setTextColor(Theme.getColor(Theme.key_chat_messageTextIn));
                 shape.setColor(Theme.getColor(Theme.key_chat_inBubble));
+                if (entry.isThinking) {
+                    shape.setStroke(dp(1), Theme.getColor(Theme.key_featuredStickers_addButton));
+                }
             } else {
                 lp.gravity = Gravity.RIGHT;
                 holder.textView.setTextColor(Theme.getColor(Theme.key_chat_messageTextOut));
                 shape.setColor(Theme.getColor(Theme.key_chat_outBubble));
             }
             holder.textView.setBackground(shape);
+
+            // Copy on long-click
+            holder.textView.setOnLongClickListener(v -> {
+                ClipboardManager cm = (ClipboardManager) parentActivity.getSystemService(Context.CLIPBOARD_SERVICE);
+                if (cm != null) {
+                    cm.setPrimaryClip(ClipData.newPlainText("Yumi AI", entry.text));
+                    BulletinFactory.of(YumiAiCopilotActivity.this).createSimpleBulletin(R.raw.chats_infotip, "Текст скопійовано").show();
+                }
+                return true;
+            });
         }
 
         @Override

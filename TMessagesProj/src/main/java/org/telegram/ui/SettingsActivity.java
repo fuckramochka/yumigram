@@ -795,7 +795,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             items.add(UItem.asShadow(null));
         }
 
-        items.add(SettingCell.Factory.of(99, 0xFF8A2BE2, 0xFF4A00E0, R.drawable.settings_features, getString(R.string.YumiSettings), getString(R.string.YumiSettingsInfo)));
+        items.add(SettingCell.Factory.of(99, 0xFF8A2BE2, 0xFF4A00E0, R.drawable.settings_features, org.telegram.messenger.yumigram.util.YumiLocale.getString(R.string.YumiSettings), org.telegram.messenger.yumigram.util.YumiLocale.getString(R.string.YumiSettingsInfo)));
         items.add(UItem.asShadow(null));
 
         items.add(SettingCell.Factory.of(1, IconBackgroundColors.BLUE.top, IconBackgroundColors.BLUE.bottom, R.drawable.settings_account, getString(R.string.SettingsAccount), getString(R.string.SettingsAccountInfo)));

@@ -1,11 +1,11 @@
 package org.telegram.ui;
 
-import static org.telegram.messenger.LocaleController.getString;
-
 import android.content.Context;
 import android.view.View;
 
 import org.telegram.messenger.R;
+import org.telegram.messenger.yumigram.update.YumiUpdateManager;
+import org.telegram.messenger.yumigram.util.YumiLocale;
 import org.telegram.ui.Components.RecyclerListView;
 import org.telegram.ui.Components.UItem;
 import org.telegram.ui.Components.UniversalAdapter;
@@ -14,11 +14,12 @@ import org.telegram.ui.Components.UniversalFragment;
 import java.util.ArrayList;
 
 /**
- * Main Yumigram Hub (Головне меню налаштувань Юмиграм).
- * Contains dedicated entry buttons for:
- * 1. Ghost Mode & Privacy (Стелс, анти-видалення, одноразові медіа)
- * 2. Yumi AI Agent (ШІ Агент, доступ до Telegram, моделі)
- * 3. Interface & Spotify Player (Spotify плеєр, інтерфейс)
+ * Clean & Minimalist Yumigram Hub.
+ * Displays only sleek, clear category buttons without cluttered subtitles:
+ * 1. Ghost Mode & Privacy
+ * 2. Yumi AI Agent
+ * 3. Spotify Music Player & Interface
+ * 4. Auto-Updates & Releases
  */
 public class YumiSettingsActivity extends UniversalFragment {
 
@@ -29,7 +30,7 @@ public class YumiSettingsActivity extends UniversalFragment {
 
     @Override
     protected CharSequence getTitle() {
-        return getString(R.string.YumiSettings);
+        return YumiLocale.getString(R.string.YumiSettings);
     }
 
     @Override
@@ -58,21 +59,21 @@ public class YumiSettingsActivity extends UniversalFragment {
 
     @Override
     protected void fillItems(ArrayList<UItem> items, UniversalAdapter adapter) {
-        items.add(UItem.asHeader(getString(R.string.YumiSettings)));
+        items.add(UItem.asHeader(YumiLocale.getString(R.string.YumiSettings)));
 
-        // 1. Ghost Mode & Privacy Hub
-        items.add(UItem.asButton(ID_MENU_GHOST, R.drawable.settings_privacy, getString(R.string.YumiMenuGhost), getString(R.string.YumiMenuGhostSubtitle)));
+        // 1. Ghost Mode & Privacy
+        items.add(UItem.asButton(ID_MENU_GHOST, R.drawable.settings_privacy, YumiLocale.getString(R.string.YumiMenuGhost)));
 
-        // 2. Yumi AI Agent Hub
-        items.add(UItem.asButton(ID_MENU_AI, R.drawable.msg_bot, getString(R.string.YumiMenuAI), getString(R.string.YumiMenuAISubtitle)));
+        // 2. Yumi AI Agent
+        items.add(UItem.asButton(ID_MENU_AI, R.drawable.msg_bot, YumiLocale.getString(R.string.YumiMenuAI)));
 
-        // 3. Interface & Spotify Player Hub
-        items.add(UItem.asButton(ID_MENU_INTERFACE, R.drawable.player_new_repeatall, getString(R.string.YumiMenuInterface), getString(R.string.YumiMenuInterfaceSubtitle)));
+        // 3. Spotify Music Player & Interface
+        items.add(UItem.asButton(ID_MENU_INTERFACE, R.drawable.player_new_repeatall, YumiLocale.getString(R.string.YumiMenuInterface)));
 
-        // 4. Auto-Updates & Releases Hub
-        items.add(UItem.asButton(ID_MENU_UPDATE, R.drawable.msg_download_settings, getString(R.string.YumiMenuUpdate), getString(R.string.YumiMenuUpdateSubtitle)));
+        // 4. Auto-Updates & Releases
+        items.add(UItem.asButton(ID_MENU_UPDATE, R.drawable.msg_download_settings, YumiLocale.getString(R.string.YumiMenuUpdate)));
 
-        items.add(UItem.asShadow("Yumigram " + org.telegram.messenger.yumigram.update.YumiUpdateManager.CURRENT_VERSION + " • " + getString(R.string.YumiSettingsInfo)));
+        items.add(UItem.asShadow("Yumigram " + YumiUpdateManager.CURRENT_VERSION + " (arm64-v8a)"));
     }
 
     @Override
@@ -96,11 +97,5 @@ public class YumiSettingsActivity extends UniversalFragment {
     @Override
     protected boolean onLongClick(UItem item, View view, int position, float x, float y) {
         return false;
-    }
-
-    private void updateList() {
-        if (listView != null && listView.adapter != null) {
-            listView.adapter.update(true);
-        }
     }
 }

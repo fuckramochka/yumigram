@@ -1,16 +1,14 @@
 package org.telegram.ui;
 
-import static org.telegram.messenger.LocaleController.getString;
-
 import android.content.Context;
 import android.text.TextUtils;
 import android.view.View;
 
 import org.telegram.messenger.AndroidUtilities;
-import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.R;
 import org.telegram.messenger.yumigram.YumiConfig;
 import org.telegram.messenger.yumigram.update.YumiUpdateManager;
+import org.telegram.messenger.yumigram.util.YumiLocale;
 import org.telegram.ui.Components.BulletinFactory;
 import org.telegram.ui.Components.RecyclerListView;
 import org.telegram.ui.Components.UItem;
@@ -21,7 +19,7 @@ import java.io.File;
 import java.util.ArrayList;
 
 /**
- * Dedicated Auto-Update & Releases Screen for Yumigram (Юмиграм).
+ * Dedicated Auto-Update & Releases Screen for Yumigram.
  * Shows current version, checks GitHub releases for green builds,
  * downloads arm64-v8a APK with live progress, and triggers system installer.
  */
@@ -39,7 +37,7 @@ public class YumiUpdateActivity extends UniversalFragment {
 
     @Override
     protected CharSequence getTitle() {
-        return getString(R.string.YumiMenuUpdate);
+        return YumiLocale.getString(R.string.YumiMenuUpdate);
     }
 
     @Override
@@ -77,40 +75,40 @@ public class YumiUpdateActivity extends UniversalFragment {
     protected void fillItems(ArrayList<UItem> items, UniversalAdapter adapter) {
         // 1. Header Top View
         String subtitle = "Current: " + YumiUpdateManager.CURRENT_VERSION + " (arm64-v8a)";
-        items.add(UItem.asTopView(getString(R.string.YumiMenuUpdate), subtitle, "RestrictedEmoji", "🚀"));
+        items.add(UItem.asTopView(YumiLocale.getString(R.string.YumiMenuUpdate), subtitle, "RestrictedEmoji", "🚀"));
 
         // 2. Settings Section
-        items.add(UItem.asHeader(getString(R.string.YumiMenuUpdate)));
-        items.add(UItem.asCheck(ID_AUTO_CHECK, getString(R.string.YumiUpdateAutoCheck)).setChecked(YumiConfig.isAutoCheckUpdatesEnabled()));
-        items.add(UItem.asShadow(getString(R.string.YumiUpdateAutoCheckInfo)));
+        items.add(UItem.asHeader(YumiLocale.getString(R.string.YumiMenuUpdate)));
+        items.add(UItem.asCheck(ID_AUTO_CHECK, YumiLocale.getString(R.string.YumiUpdateAutoCheck)).setChecked(YumiConfig.isAutoCheckUpdatesEnabled()));
+        items.add(UItem.asShadow(YumiLocale.getString(R.string.YumiUpdateAutoCheckInfo)));
 
         // 3. Action Section: Check button
-        String checkTitle = isChecking ? getString(R.string.YumiUpdateChecking) : getString(R.string.YumiUpdateCheckButton);
+        String checkTitle = isChecking ? YumiLocale.getString(R.string.YumiUpdateChecking) : YumiLocale.getString(R.string.YumiUpdateCheckButton);
         items.add(UItem.asButton(ID_CHECK_NOW, R.drawable.msg_download_settings, checkTitle));
 
         // 4. Update status & Release Details
         if (hasUpdateAvailable != null && updateInfo != null) {
-            items.add(UItem.asHeader(getString(R.string.YumiUpdateCardHeader)));
+            items.add(UItem.asHeader(YumiLocale.getString(R.string.YumiUpdateCardHeader)));
 
             if (hasUpdateAvailable) {
                 String buttonText;
                 if (readyApkFile != null && readyApkFile.exists()) {
-                    buttonText = getString(R.string.YumiUpdateInstallNow);
+                    buttonText = YumiLocale.getString(R.string.YumiUpdateInstallNow);
                 } else if (downloadProgress != null) {
                     buttonText = downloadProgress;
                 } else {
                     String sizeStr = updateInfo.apkSize > 0 ? AndroidUtilities.formatFileSize(updateInfo.apkSize) : "arm64";
-                    buttonText = LocaleController.formatString("YumiUpdateDownloadInstall", R.string.YumiUpdateDownloadInstall, sizeStr);
+                    buttonText = YumiLocale.formatString("YumiUpdateDownloadInstall", R.string.YumiUpdateDownloadInstall, sizeStr);
                 }
 
                 items.add(UItem.asButton(ID_DOWNLOAD_INSTALL, R.drawable.msg_download, buttonText, updateInfo.tagName));
 
                 if (!TextUtils.isEmpty(updateInfo.changelog)) {
-                    items.add(UItem.asHeader(LocaleController.formatString("YumiUpdateChangelog", R.string.YumiUpdateChangelog, updateInfo.tagName)));
+                    items.add(UItem.asHeader(YumiLocale.formatString("YumiUpdateChangelog", R.string.YumiUpdateChangelog, updateInfo.tagName)));
                     items.add(UItem.asShadow(updateInfo.changelog));
                 }
             } else {
-                items.add(UItem.asShadow(LocaleController.formatString("YumiUpdateLatestInfo", R.string.YumiUpdateLatestInfo, YumiUpdateManager.CURRENT_VERSION)));
+                items.add(UItem.asShadow(YumiLocale.formatString("YumiUpdateLatestInfo", R.string.YumiUpdateLatestInfo, YumiUpdateManager.CURRENT_VERSION)));
             }
         }
     }
@@ -142,12 +140,12 @@ public class YumiUpdateActivity extends UniversalFragment {
                         if (hasUpdate) {
                             BulletinFactory.of(YumiUpdateActivity.this).createSimpleBulletin(
                                     R.raw.chats_infotip,
-                                    LocaleController.formatString("YumiUpdateAvailableDetails", R.string.YumiUpdateAvailableDetails, update.tagName)
+                                    YumiLocale.formatString("YumiUpdateAvailableDetails", R.string.YumiUpdateAvailableDetails, update.tagName)
                             ).show();
                         } else {
                             BulletinFactory.of(YumiUpdateActivity.this).createSimpleBulletin(
                                     R.raw.chats_infotip,
-                                    getString(R.string.YumiUpdateLatest)
+                                    YumiLocale.getString(R.string.YumiUpdateLatest)
                             ).show();
                         }
                     }
@@ -159,7 +157,7 @@ public class YumiUpdateActivity extends UniversalFragment {
 
                         BulletinFactory.of(YumiUpdateActivity.this).createSimpleBulletin(
                                 R.raw.error,
-                                LocaleController.formatString("YumiUpdateError", R.string.YumiUpdateError, error)
+                                YumiLocale.formatString("YumiUpdateError", R.string.YumiUpdateError, error)
                         ).show();
                     }
                 });
@@ -183,7 +181,7 @@ public class YumiUpdateActivity extends UniversalFragment {
                     public void onProgress(int percent, long downloadedBytes, long totalBytes) {
                         String dlStr = AndroidUtilities.formatFileSize(downloadedBytes);
                         String totStr = AndroidUtilities.formatFileSize(totalBytes);
-                        downloadProgress = LocaleController.formatString("YumiUpdateDownloading", R.string.YumiUpdateDownloading, percent, dlStr, totStr);
+                        downloadProgress = YumiLocale.formatString("YumiUpdateDownloading", R.string.YumiUpdateDownloading, percent, dlStr, totStr);
                         updateList();
                     }
 
@@ -195,7 +193,7 @@ public class YumiUpdateActivity extends UniversalFragment {
 
                         BulletinFactory.of(YumiUpdateActivity.this).createSimpleBulletin(
                                 R.raw.chats_infotip,
-                                getString(R.string.YumiUpdateInstallNow)
+                                YumiLocale.getString(R.string.YumiUpdateInstallNow)
                         ).show();
 
                         YumiUpdateManager.installApk(getParentActivity(), apkFile);
@@ -208,7 +206,7 @@ public class YumiUpdateActivity extends UniversalFragment {
 
                         BulletinFactory.of(YumiUpdateActivity.this).createSimpleBulletin(
                                 R.raw.error,
-                                LocaleController.formatString("YumiUpdateError", R.string.YumiUpdateError, error)
+                                YumiLocale.formatString("YumiUpdateError", R.string.YumiUpdateError, error)
                         ).show();
                     }
                 });

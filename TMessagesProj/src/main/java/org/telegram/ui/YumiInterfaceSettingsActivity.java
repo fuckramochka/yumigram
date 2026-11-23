@@ -1,12 +1,11 @@
 package org.telegram.ui;
 
-import static org.telegram.messenger.LocaleController.getString;
-
 import android.content.Context;
 import android.view.View;
 
 import org.telegram.messenger.R;
 import org.telegram.messenger.yumigram.YumiConfig;
+import org.telegram.messenger.yumigram.util.YumiLocale;
 import org.telegram.ui.Components.RecyclerListView;
 import org.telegram.ui.Components.UItem;
 import org.telegram.ui.Components.UniversalAdapter;
@@ -15,7 +14,8 @@ import org.telegram.ui.Components.UniversalFragment;
 import java.util.ArrayList;
 
 /**
- * Dedicated settings screen for Yumigram Interface & Spotify Player (Інтерфейс та Spotify плеєр).
+ * Dedicated settings screen for Yumigram Interface & Spotify Player.
+ * Features dynamic expanding/collapsing of player options.
  */
 public class YumiInterfaceSettingsActivity extends UniversalFragment {
 
@@ -30,7 +30,7 @@ public class YumiInterfaceSettingsActivity extends UniversalFragment {
 
     @Override
     protected CharSequence getTitle() {
-        return getString(R.string.YumiMenuInterface);
+        return YumiLocale.getString(R.string.YumiMenuInterface);
     }
 
     @Override
@@ -60,19 +60,23 @@ public class YumiInterfaceSettingsActivity extends UniversalFragment {
     @Override
     protected void fillItems(ArrayList<UItem> items, UniversalAdapter adapter) {
         // --- 1. Spotify Player Section ---
-        items.add(UItem.asHeader(getString(R.string.YumiSpotifyPlayer)));
-        items.add(UItem.asCheck(ID_SPOTIFY_PLAYER, getString(R.string.YumiSpotifyPlayer)).setChecked(YumiConfig.isSpotifyPlayerEnabled()));
-        items.add(UItem.asCheck(ID_SPOTIFY_DYNAMIC_COLOR, getString(R.string.YumiSpotifyDynamicColor)).setChecked(YumiConfig.isSpotifyDynamicColorEnabled()));
-        items.add(UItem.asCheck(ID_ENHANCED_PLAYER, getString(R.string.YumiEnhancedPlayer)).setChecked(YumiConfig.isEnhancedPlayerEnabled()));
-        items.add(UItem.asCheck(ID_EQUALIZER, getString(R.string.YumiEqualizer)).setChecked(YumiConfig.isEqualizerEnabled()));
-        items.add(UItem.asShadow(getString(R.string.YumiSpotifyPlayerInfo)));
+        boolean spotifyEnabled = YumiConfig.isSpotifyPlayerEnabled();
+        items.add(UItem.asHeader(YumiLocale.getString(R.string.YumiSpotifyPlayer)));
+        items.add(UItem.asCheck(ID_SPOTIFY_PLAYER, YumiLocale.getString(R.string.YumiSpotifyPlayer)).setChecked(spotifyEnabled));
+
+        if (spotifyEnabled) {
+            items.add(UItem.asCheck(ID_SPOTIFY_DYNAMIC_COLOR, YumiLocale.getString(R.string.YumiSpotifyDynamicColor)).setChecked(YumiConfig.isSpotifyDynamicColorEnabled()));
+            items.add(UItem.asCheck(ID_ENHANCED_PLAYER, YumiLocale.getString(R.string.YumiEnhancedPlayer)).setChecked(YumiConfig.isEnhancedPlayerEnabled()));
+            items.add(UItem.asCheck(ID_EQUALIZER, YumiLocale.getString(R.string.YumiEqualizer)).setChecked(YumiConfig.isEqualizerEnabled()));
+        }
+        items.add(UItem.asShadow(YumiLocale.getString(R.string.YumiSpotifyPlayerInfo)));
 
         // --- 2. Interface Customization ---
-        items.add(UItem.asHeader(getString(R.string.YumiSectionUI)));
-        items.add(UItem.asCheck(ID_HIDE_STORIES, getString(R.string.YumiHideStories)).setChecked(YumiConfig.isHideStoriesEnabled()));
-        items.add(UItem.asCheck(ID_HIDE_SPONSORED, getString(R.string.YumiHideSponsored)).setChecked(YumiConfig.isHideSponsoredEnabled()));
-        items.add(UItem.asCheck(ID_CONFIRM_VOICE_CALL, getString(R.string.YumiConfirmVoiceCall)).setChecked(YumiConfig.isConfirmVoiceCallEnabled()));
-        items.add(UItem.asShadow(getString(R.string.YumiHideStoriesInfo)));
+        items.add(UItem.asHeader(YumiLocale.getString(R.string.YumiSectionUI)));
+        items.add(UItem.asCheck(ID_HIDE_STORIES, YumiLocale.getString(R.string.YumiHideStories)).setChecked(YumiConfig.isHideStoriesEnabled()));
+        items.add(UItem.asCheck(ID_HIDE_SPONSORED, YumiLocale.getString(R.string.YumiHideSponsored)).setChecked(YumiConfig.isHideSponsoredEnabled()));
+        items.add(UItem.asCheck(ID_CONFIRM_VOICE_CALL, YumiLocale.getString(R.string.YumiConfirmVoiceCall)).setChecked(YumiConfig.isConfirmVoiceCallEnabled()));
+        items.add(UItem.asShadow(YumiLocale.getString(R.string.YumiHideStoriesInfo)));
     }
 
     @Override

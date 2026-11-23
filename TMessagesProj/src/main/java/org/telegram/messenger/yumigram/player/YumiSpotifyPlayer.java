@@ -2,31 +2,33 @@ package org.telegram.messenger.yumigram.player;
 
 import static org.telegram.messenger.AndroidUtilities.dp;
 
+import android.content.res.ColorStateList;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.PorterDuff;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.RippleDrawable;
-import android.content.res.ColorStateList;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 
 import androidx.palette.graphics.Palette;
 
 import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.MediaController;
 import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.audioinfo.AudioInfo;
-import org.telegram.messenger.MediaController;
 import org.telegram.messenger.yumigram.YumiConfig;
 import org.telegram.ui.Components.AudioPlayerAlert;
+import org.telegram.ui.Components.PlayPauseDrawable;
 import org.telegram.ui.Components.SeekBarView;
 
 /**
  * Spotify Player Styler for Yumigram (Юмиграм).
  * Applies Spotify's aesthetic:
- * 1. Spotify Green (#1DB954) prominent circular Play/Pause button
- * 2. Spotify Green seekbar progress indicator
+ * 1. Prominent Spotify Green (#1DB954) 54x54 circular Play/Pause button with black icon
+ * 2. Spotify Green seekbar progress indicator with translucent white track
  * 3. Rounded album artwork container (12dp radius)
  * 4. Dynamic album gradient background or dark Spotify palette (#121212)
  */
@@ -45,13 +47,20 @@ public class YumiSpotifyPlayer {
             SeekBarView seekBarView,
             MessageObject messageObject
     ) {
-        if (!YumiConfig.isSpotifyPlayerEnabled() || containerView == null) {
+        if (!YumiConfig.isSpotifyPlayerEnabled()) {
             return;
         }
 
         try {
             // 1. Style Play/Pause button as iconic Spotify circular button
             if (playButton != null) {
+                ViewGroup.LayoutParams lp = playButton.getLayoutParams();
+                if (lp != null && (lp.width != dp(54) || lp.height != dp(54))) {
+                    lp.width = dp(54);
+                    lp.height = dp(54);
+                    playButton.setLayoutParams(lp);
+                }
+
                 GradientDrawable playBg = new GradientDrawable();
                 playBg.setShape(GradientDrawable.OVAL);
                 playBg.setColor(SPOTIFY_GREEN);
@@ -62,7 +71,13 @@ public class YumiSpotifyPlayer {
                         null
                 );
                 playButton.setBackground(ripple);
-                playButton.setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN);
+                playButton.setElevation(dp(4));
+
+                if (playButton.getDrawable() instanceof PlayPauseDrawable) {
+                    ((PlayPauseDrawable) playButton.getDrawable()).setColor(Color.BLACK);
+                } else {
+                    playButton.setColorFilter(Color.BLACK, PorterDuff.Mode.SRC_IN);
+                }
             }
 
             // 2. Style SeekBar with Spotify Green
@@ -80,7 +95,7 @@ public class YumiSpotifyPlayer {
                 }
             }
 
-            // Apply Spotify smooth vertical gradient
+            // Apply Spotify smooth vertical gradient to playerLayout & container
             GradientDrawable backgroundGradient = new GradientDrawable(
                     GradientDrawable.Orientation.TOP_BOTTOM,
                     new int[] { topColor, SPOTIFY_DARK_BG }
@@ -91,10 +106,21 @@ public class YumiSpotifyPlayer {
                     0, 0,
                     0, 0
             });
-            containerView.setBackground(backgroundGradient);
+
+            if (playerLayout != null) {
+                playerLayout.setBackground(backgroundGradient);
+            }
+            if (containerView != null) {
+                containerView.setBackground(backgroundGradient);
+            }
+
+            // 4. Style cover artwork container
+            if (coverContainer != null) {
+                coverContainer.setElevation(dp(6));
+            }
 
         } catch (Throwable e) {
-            // Safe fallback to default UI in case of any styling exception
+            // Safe fallback
         }
     }
 
@@ -115,10 +141,9 @@ public class YumiSpotifyPlayer {
             Palette.Swatch dominant = palette.getDominantSwatch();
             if (dominant != null) {
                 int rgb = dominant.getRgb();
-                // Darken dominant color to maintain Spotify's dark aesthetic
                 float[] hsv = new float[3];
                 Color.colorToHSV(rgb, hsv);
-                hsv[2] = Math.min(hsv[2], 0.25f);
+                hsv[2] = Math.min(hsv[2], 0.28f);
                 return Color.HSVToColor(hsv);
             }
         } catch (Throwable ignored) {

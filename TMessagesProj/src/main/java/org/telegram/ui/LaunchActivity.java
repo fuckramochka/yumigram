@@ -7286,8 +7286,8 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                     if (fragment != null) {
                         BulletinFactory.of(fragment).createSimpleBulletin(
                                 R.raw.chats_infotip,
-                                LocaleController.formatString("YumiUpdateAvailableDetails", R.string.YumiUpdateAvailableDetails, update.tagName),
-                                LocaleController.getString(R.string.YumiMenuUpdate),
+                                org.telegram.messenger.yumigram.util.YumiLocale.formatString("YumiUpdateAvailableDetails", R.string.YumiUpdateAvailableDetails, update.tagName),
+                                org.telegram.messenger.yumigram.util.YumiLocale.getString(R.string.YumiMenuUpdate),
                                 () -> fragment.presentFragment(new YumiUpdateActivity())
                         ).show();
                     }

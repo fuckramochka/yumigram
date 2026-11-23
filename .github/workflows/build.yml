@@ -52,19 +52,18 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: github.ref == 'refs/heads/yumigram' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')
         with:
-          tag_name: v1.0.23
-          name: "Yumigram v1.0.23 (arm64-v8a)"
+          tag_name: v1.0.24
+          name: "Yumigram v1.0.24 (arm64-v8a)"
           body: |
-            ### Yumigram Android v1.0.23 (arm64-v8a)
-            - 🔝 Yumigram Settings moved to the top of Settings list
-            - 🌐 3-language full localization (English, Ukrainian, Russian)
-            - 📁 Re-organized Settings Hub:
-              - 👻 Ghost Mode & Privacy (Anti-Delete, Secret Media, Stealth)
-              - 🤖 AI Agent (Autonomous agent, Gemini 3.5/3.1, Local LLM)
-              - 🎨 Interface & Spotify-style Music Player
-              - ⚡ Auto-Updates & Releases (Direct GitHub integration, 1-tap install)
-            - 🎵 Spotify-style music player redesign with dynamic album artwork gradient
-            - 🚀 In-app auto-update system with automatic checks and live download progress
+            ### Yumigram Android v1.0.24 (arm64-v8a)
+            - 🤖 Real Autonomous AI Agent with full Telegram tool execution (read chats, send messages, summarize, transcribe)
+            - 💾 Persistent AI Agent Chat history with suggestion chips
+            - 🎡 3D Wheel Picker for model selection (scale, blur, snap-to-center)
+            - 🔑 Dedicated Gemini API Key BottomSheet with clipboard paste & quick link
+            - 👻 Dynamic expanding/collapsing settings in Ghost Mode & Interface
+            - 🌐 Fixed language resolution (guaranteed English when English is chosen)
+            - 🎵 Spotify Player redesign: 54dp green circular button, black icons, dynamic album palette
+            - ⚡ Auto-updates integration
           files: |
             TMessagesProj/build/outputs/apk/**/*.apk
           draft: false

@@ -13397,7 +13397,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         io.add(R.drawable.msg_bot, "Yumi Copilot ✨", () -> {
             presentFragment(new YumiAiCopilotActivity());
         });
-        io.add(R.drawable.msg_settings_old, LocaleController.getString(R.string.YumiSettings), () -> {
+        io.add(R.drawable.msg_settings_old, org.telegram.messenger.yumigram.util.YumiLocale.getString(R.string.YumiSettings), () -> {
             presentFragment(new YumiSettingsActivity());
         });
         if (ApplicationLoader.applicationLoaderInstance != null) {
