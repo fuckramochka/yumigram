@@ -92,7 +92,7 @@ public class YumiAiCopilotActivity extends BaseFragment {
         inputBar.setGravity(Gravity.CENTER_VERTICAL);
 
         inputEditText = new EditText(context);
-        inputEditText.setHint("Запитайте ШІ або дайте команду...");
+        inputEditText.setHint(LocaleController.getString(R.string.YumiAiInputHint));
         inputEditText.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
         inputEditText.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
         inputEditText.setHintTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteHintText));
@@ -110,7 +110,7 @@ public class YumiAiCopilotActivity extends BaseFragment {
 
         // Welcome greeting
         if (messages.isEmpty()) {
-            messages.add(new ChatEntry(true, "Привіт! Я твій особистий ШІ-помічник Yumi Copilot ✨\n\nЯ можу:\n• Переказати будь-який твій чат або канал\n• Знайти потрібну інформацію\n• Написати повідомлення за тебе («Напиши [Ім'я]: [Текст]»)\n• Відповісти на будь-яке запитання."));
+            messages.add(new ChatEntry(true, LocaleController.getString(R.string.YumiAiGreeting)));
             adapter.notifyDataSetChanged();
         }
 
@@ -132,21 +132,31 @@ public class YumiAiCopilotActivity extends BaseFragment {
     private void processUserQuery(String query) {
         String lower = query.toLowerCase();
 
-        // Check if query is a request to send a message
-        if (lower.startsWith("напиши ") || lower.startsWith("відправ ")) {
+        // Check if query is a request to send a message (UK/EN/RU)
+        if (lower.startsWith("напиши ") || lower.startsWith("відправ ") || lower.startsWith("send ") || lower.startsWith("write ") || lower.startsWith("отправь ")) {
+            if (!org.telegram.messenger.yumigram.YumiConfig.isAiAgentSendMessagesEnabled()) {
+                messages.add(new ChatEntry(true, "⚠️ AI Agent message sending is disabled in Yumigram AI Settings."));
+                adapter.notifyItemInserted(messages.size() - 1);
+                return;
+            }
             handleSendRequest(query);
             return;
         }
 
-        // Check if query is a request to read a chat
-        if (lower.startsWith("прочитай ") || lower.startsWith("що в чаті ")) {
+        // Check if query is a request to read a chat (UK/EN/RU)
+        if (lower.startsWith("прочитай ") || lower.startsWith("що в чаті ") || lower.startsWith("read ") || lower.startsWith("summarize ") || lower.startsWith("что в чате ")) {
+            if (!org.telegram.messenger.yumigram.YumiConfig.isAiAgentReadChatEnabled()) {
+                messages.add(new ChatEntry(true, "⚠️ AI Agent chat reading is disabled in Yumigram AI Settings."));
+                adapter.notifyItemInserted(messages.size() - 1);
+                return;
+            }
             handleReadRequest(query);
             return;
         }
 
         // Standard AI generation
         StringBuilder contextBuilder = new StringBuilder();
-        contextBuilder.append("Ти — вбудований розумний асистент Yumigram у додатку Telegram. Допомагай користувачу лаконічно, дружньо та по суті.\n\nКористувач запитує: ").append(query);
+        contextBuilder.append("You are Yumigram's advanced AI Copilot Agent in Telegram. Be helpful, concise, friendly, and act with full awareness of your assistant capabilities.\n\nUser asks: ").append(query);
 
         YumiAiManager.requestAi(contextBuilder.toString(), new YumiAiManager.AiCallback() {
             @Override
@@ -158,7 +168,7 @@ public class YumiAiCopilotActivity extends BaseFragment {
 
             @Override
             public void onError(String errorMessage) {
-                messages.add(new ChatEntry(true, "⚠️ Помилка ШІ: " + errorMessage));
+                messages.add(new ChatEntry(true, "⚠️ Error: " + errorMessage));
                 adapter.notifyItemInserted(messages.size() - 1);
                 recyclerView.scrollToPosition(messages.size() - 1);
             }
@@ -166,15 +176,15 @@ public class YumiAiCopilotActivity extends BaseFragment {
     }
 
     private void handleSendRequest(String query) {
-        // e.g.: "напиши Тарасу: привіт, як справи"
+        // e.g.: "напиши Тарасу: привіт" or "write to John: hello"
         String[] parts = query.split(":", 2);
         if (parts.length < 2) {
-            messages.add(new ChatEntry(true, "Щоб відправити повідомлення, вкажіть адресата і текст через двокрапку. Наприклад:\n«Напиши [Ім'я]: привіт, зустрінемось о 18:00»"));
+            messages.add(new ChatEntry(true, "Please specify recipient and message separated by a colon, e.g.:\n«Write to [Name]: [Message]» or «Напиши [Ім'я]: [Текст]»"));
             adapter.notifyItemInserted(messages.size() - 1);
             return;
         }
 
-        String targetName = parts[0].replaceFirst("(?i)(напиши|відправ)\\s*", "").trim();
+        String targetName = parts[0].replaceFirst("(?i)(напиши|відправ|send|write to|write|отправь)\\s*", "").trim();
         String messageBody = parts[1].trim();
 
         TLRPC.User foundUser = findUserByName(targetName);
@@ -191,7 +201,7 @@ public class YumiAiCopilotActivity extends BaseFragment {
     }
 
     private void handleReadRequest(String query) {
-        String targetName = query.replaceFirst("(?i)(прочитай|що в чаті)\\s*", "").trim();
+        String targetName = query.replaceFirst("(?i)(прочитай|що в чаті|read|summarize|что в чате)\\s*", "").trim();
         TLRPC.User foundUser = findUserByName(targetName);
 
         if (foundUser != null) {

@@ -281,6 +281,9 @@ public class StoriesController {
     }
 
     public boolean hasStories() {
+        if (org.telegram.messenger.yumigram.YumiConfig.isHideStoriesEnabled()) {
+            return false;
+        }
         return (dialogListStories != null && dialogListStories.size() > 0) || hasSelfStories();
     }
 

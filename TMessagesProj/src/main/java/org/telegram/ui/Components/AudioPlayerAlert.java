@@ -1483,6 +1483,10 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
         updateTitle(false);
         updateRepeatButton();
         updateEmptyView();
+        org.telegram.messenger.yumigram.player.YumiSpotifyPlayer.applySpotifyStyle(
+                this, containerView, playerLayout, coverContainer, playButton, seekBarView,
+                MediaController.getInstance().getPlayingMessageObject()
+        );
     }
 
     @Override
@@ -2295,6 +2299,9 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
             checkIfMusicDownloaded(messageObject);
             updateProgress(messageObject, !sameMessageObject);
             updateCover(messageObject, !sameMessageObject);
+            org.telegram.messenger.yumigram.player.YumiSpotifyPlayer.applySpotifyStyle(
+                    this, containerView, playerLayout, coverContainer, playButton, seekBarView, messageObject
+            );
 
             if (MediaController.getInstance().isMessagePaused()) {
                 playPauseDrawable.setPause(false);

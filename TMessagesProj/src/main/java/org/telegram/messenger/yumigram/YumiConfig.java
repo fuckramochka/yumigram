@@ -48,6 +48,10 @@ public class YumiConfig {
 
     // --- 6. Built-in AI Assistant ---
     public static final String KEY_AI_ENABLED = "yumi_ai_enabled";
+    public static final String KEY_AI_AGENT_READ_CHAT = "yumi_ai_agent_read_chat";
+    public static final String KEY_AI_AGENT_SEND_MESSAGES = "yumi_ai_agent_send_messages";
+    public static final String KEY_AI_AGENT_SMART_REPLIES = "yumi_ai_agent_smart_replies";
+    public static final String KEY_AI_VOICE_TRANSCRIPTION = "yumi_ai_voice_transcription";
     public static final String KEY_AI_MODE = "yumi_ai_mode"; // "cloud", "local"
     public static final String KEY_AI_PROVIDER = "yumi_ai_provider"; // "gemini", "openai", "custom"
     public static final String KEY_AI_API_KEY = "yumi_ai_api_key";
@@ -70,11 +74,15 @@ public class YumiConfig {
             "gemini-1.5-pro"
     };
 
-    // --- 7. Enhanced Media Player ---
+    // --- 7. Enhanced Media Player & Spotify Style ---
     public static final String KEY_ENHANCED_PLAYER = "yumi_enhanced_player";
+    public static final String KEY_SPOTIFY_PLAYER = "yumi_spotify_player";
+    public static final String KEY_SPOTIFY_DYNAMIC_COLOR = "yumi_spotify_dynamic_color";
     public static final String KEY_EQUALIZER_ENABLED = "yumi_equalizer_enabled";
     public static final String KEY_CUSTOM_AUDIO_SPEED = "yumi_custom_audio_speed";
     public static final String KEY_VIDEO_SWIPE_GESTURES = "yumi_video_swipe_gestures";
+    public static final String KEY_HIDE_STORIES = "yumi_hide_stories";
+    public static final String KEY_CONFIRM_VOICE_CALL = "yumi_confirm_voice_call";
 
     private static SharedPreferences getPrefs() {
         if (preferences == null) {
@@ -352,6 +360,106 @@ public class YumiConfig {
         SharedPreferences p = getPrefs();
         if (p != null) {
             p.edit().putBoolean(KEY_EQUALIZER_ENABLED, enabled).apply();
+        }
+    }
+
+    // --- AI Agent Capabilities Getters & Setters ---
+
+    public static boolean isAiAgentReadChatEnabled() {
+        SharedPreferences p = getPrefs();
+        return p == null || p.getBoolean(KEY_AI_AGENT_READ_CHAT, true);
+    }
+
+    public static void setAiAgentReadChatEnabled(boolean enabled) {
+        SharedPreferences p = getPrefs();
+        if (p != null) {
+            p.edit().putBoolean(KEY_AI_AGENT_READ_CHAT, enabled).apply();
+        }
+    }
+
+    public static boolean isAiAgentSendMessagesEnabled() {
+        SharedPreferences p = getPrefs();
+        return p == null || p.getBoolean(KEY_AI_AGENT_SEND_MESSAGES, true);
+    }
+
+    public static void setAiAgentSendMessagesEnabled(boolean enabled) {
+        SharedPreferences p = getPrefs();
+        if (p != null) {
+            p.edit().putBoolean(KEY_AI_AGENT_SEND_MESSAGES, enabled).apply();
+        }
+    }
+
+    public static boolean isAiAgentSmartRepliesEnabled() {
+        SharedPreferences p = getPrefs();
+        return p == null || p.getBoolean(KEY_AI_AGENT_SMART_REPLIES, true);
+    }
+
+    public static void setAiAgentSmartRepliesEnabled(boolean enabled) {
+        SharedPreferences p = getPrefs();
+        if (p != null) {
+            p.edit().putBoolean(KEY_AI_AGENT_SMART_REPLIES, enabled).apply();
+        }
+    }
+
+    public static boolean isAiVoiceTranscriptionEnabled() {
+        SharedPreferences p = getPrefs();
+        return p == null || p.getBoolean(KEY_AI_VOICE_TRANSCRIPTION, true);
+    }
+
+    public static void setAiVoiceTranscriptionEnabled(boolean enabled) {
+        SharedPreferences p = getPrefs();
+        if (p != null) {
+            p.edit().putBoolean(KEY_AI_VOICE_TRANSCRIPTION, enabled).apply();
+        }
+    }
+
+    // --- Spotify & Interface Getters & Setters ---
+
+    public static boolean isSpotifyPlayerEnabled() {
+        SharedPreferences p = getPrefs();
+        return p == null || p.getBoolean(KEY_SPOTIFY_PLAYER, true);
+    }
+
+    public static void setSpotifyPlayerEnabled(boolean enabled) {
+        SharedPreferences p = getPrefs();
+        if (p != null) {
+            p.edit().putBoolean(KEY_SPOTIFY_PLAYER, enabled).apply();
+        }
+    }
+
+    public static boolean isSpotifyDynamicColorEnabled() {
+        SharedPreferences p = getPrefs();
+        return p == null || p.getBoolean(KEY_SPOTIFY_DYNAMIC_COLOR, true);
+    }
+
+    public static void setSpotifyDynamicColorEnabled(boolean enabled) {
+        SharedPreferences p = getPrefs();
+        if (p != null) {
+            p.edit().putBoolean(KEY_SPOTIFY_DYNAMIC_COLOR, enabled).apply();
+        }
+    }
+
+    public static boolean isHideStoriesEnabled() {
+        SharedPreferences p = getPrefs();
+        return p != null && p.getBoolean(KEY_HIDE_STORIES, false);
+    }
+
+    public static void setHideStoriesEnabled(boolean enabled) {
+        SharedPreferences p = getPrefs();
+        if (p != null) {
+            p.edit().putBoolean(KEY_HIDE_STORIES, enabled).apply();
+        }
+    }
+
+    public static boolean isConfirmVoiceCallEnabled() {
+        SharedPreferences p = getPrefs();
+        return p != null && p.getBoolean(KEY_CONFIRM_VOICE_CALL, false);
+    }
+
+    public static void setConfirmVoiceCallEnabled(boolean enabled) {
+        SharedPreferences p = getPrefs();
+        if (p != null) {
+            p.edit().putBoolean(KEY_CONFIRM_VOICE_CALL, enabled).apply();
         }
     }
 }
