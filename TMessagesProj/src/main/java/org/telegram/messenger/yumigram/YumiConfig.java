@@ -83,6 +83,7 @@ public class YumiConfig {
     public static final String KEY_VIDEO_SWIPE_GESTURES = "yumi_video_swipe_gestures";
     public static final String KEY_HIDE_STORIES = "yumi_hide_stories";
     public static final String KEY_CONFIRM_VOICE_CALL = "yumi_confirm_voice_call";
+    public static final String KEY_PROFILE_V2 = "yumi_profile_v2";
 
     // --- 8. Auto Updates ---
     public static final String KEY_AUTO_CHECK_UPDATES = "yumi_auto_check_updates";
@@ -427,6 +428,18 @@ public class YumiConfig {
         SharedPreferences p = getPrefs();
         if (p != null) {
             p.edit().putBoolean(KEY_SPOTIFY_PLAYER, enabled).apply();
+        }
+    }
+
+    public static boolean isProfileV2Enabled() {
+        SharedPreferences p = getPrefs();
+        return p == null || p.getBoolean(KEY_PROFILE_V2, true);
+    }
+
+    public static void setProfileV2Enabled(boolean enabled) {
+        SharedPreferences p = getPrefs();
+        if (p != null) {
+            p.edit().putBoolean(KEY_PROFILE_V2, enabled).apply();
         }
     }
 

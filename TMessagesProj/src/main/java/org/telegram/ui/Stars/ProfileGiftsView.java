@@ -22,9 +22,9 @@ import androidx.annotation.NonNull;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.MessagesController;
+import org.telegram.messenger.yumigram.YumiConfig;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.Utilities;
-import org.telegram.messenger.browser.Browser;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.tgnet.tl.TL_stars;
 import org.telegram.ui.ActionBar.ActionBar;
@@ -163,6 +163,7 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
     public final class Gift {
 
         public final long id;
+        public final TL_stars.TL_starGiftUnique uniqueGift;
         public final TLRPC.Document document;
         public final long documentId;
         public final int color;
@@ -173,6 +174,7 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
 
         public Gift(TL_stars.TL_starGiftUnique gift) {
             id = gift.id;
+            uniqueGift = gift;
             document = gift.getDocument();
             documentId = document == null ? 0 : document.id;
             final TL_stars.starGiftAttributeBackdrop backdrop = findAttribute(gift.attributes, TL_stars.starGiftAttributeBackdrop.class);
@@ -183,6 +185,7 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
 
         public Gift(TLRPC.TL_emojiStatusCollectible status) {
             id = status.collectible_id;
+            uniqueGift = null;
             document = null;
             documentId = status.document_id;
             color = status.center_color | 0xFF000000;
@@ -257,6 +260,10 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
     public int maxCount;
 
     public void update() {
+        if (dialogId <= 0 || !YumiConfig.isProfileV2Enabled()) {
+            clearGifts();
+            return;
+        }
         if (!MessagesController.getInstance(currentAccount).enableGiftsInProfile) {
             return;
         }
@@ -366,6 +373,18 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
 
         if (changed)
             invalidate();
+    }
+
+    private void clearGifts() {
+        for (Gift gift : gifts) {
+            if (gift.emojiDrawable != null) {
+                gift.emojiDrawable.removeView(this);
+            }
+        }
+        gifts.clear();
+        oldGifts.clear();
+        giftIds.clear();
+        invalidate();
     }
 
     private final TimeInterpolator giftCollapseXInterpolator = new DecelerateInterpolator();
@@ -507,6 +526,11 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
     }
 
     public void onGiftClick(Gift gift) {
-        Browser.openUrl(getContext(), "https://t.me/nft/" + gift.slug);
+        if (gift == null || gift.slug == null) {
+            return;
+        }
+        new StarGiftSheet(getContext(), currentAccount, dialogId, resourcesProvider)
+                .set(gift.slug, gift.uniqueGift, list)
+                .show();
     }
 }

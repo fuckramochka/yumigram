@@ -74,6 +74,7 @@
     <string name="YumiHideSponsoredInfo">Hides promotional posts in public channels</string>
     <string name="YumiConfirmVoiceCall">Confirm Before Calling</string>
     <string name="YumiConfirmVoiceCallInfo">Shows confirmation dialog before placing voice and video calls</string>
+    <string name="YumiProfileV2">Profile V2</string>
     <string name="YumiAiInputHint">Ask AI Agent or give a command…</string>
     <string name="YumiAiGreeting">Hello! I am your personal Yumi Copilot AI Agent ✨\n\nI can:\n• Summarize any chat or channel\n• Read discussions and find answers\n• Send messages for you («Write to [Name]: [Text]»)\n• Answer questions and translate text.</string>
     <!-- Yumigram Auto-Updates -->

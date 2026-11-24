@@ -74,6 +74,7 @@
     <string name="YumiHideSponsoredInfo">Приховує рекламні публікації у публічних каналах</string>
     <string name="YumiConfirmVoiceCall">Підтвердження перед дзвінком</string>
     <string name="YumiConfirmVoiceCallInfo">Запитувати підтвердження перед викликом, щоб уникнути випадкових натискань</string>
+    <string name="YumiProfileV2">Профіль V2</string>
     <string name="YumiAiInputHint">Запитайте ШІ Агента або дайте команду…</string>
     <string name="YumiAiGreeting">Привіт! Я твій особистий ШІ Агент Yumi Copilot ✨\n\nЯ можу:\n• Переказати будь-який твій чат або канал\n• Прочитати бесіду та знайти відповіді\n• Написати повідомлення за тебе («Напиши [Ім\'я]: [Текст]»)\n• Відповісти на будь-яке запитання та перекладати текст.</string>
     <!-- Yumigram Auto-Updates -->

@@ -27,6 +27,7 @@ public class YumiInterfaceSettingsActivity extends UniversalFragment {
     private static final int ID_HIDE_STORIES = 10;
     private static final int ID_HIDE_SPONSORED = 11;
     private static final int ID_CONFIRM_VOICE_CALL = 12;
+    private static final int ID_PROFILE_V2 = 13;
 
     @Override
     protected CharSequence getTitle() {
@@ -76,6 +77,7 @@ public class YumiInterfaceSettingsActivity extends UniversalFragment {
         items.add(UItem.asCheck(ID_HIDE_STORIES, YumiLocale.getString(R.string.YumiHideStories)).setChecked(YumiConfig.isHideStoriesEnabled()));
         items.add(UItem.asCheck(ID_HIDE_SPONSORED, YumiLocale.getString(R.string.YumiHideSponsored)).setChecked(YumiConfig.isHideSponsoredEnabled()));
         items.add(UItem.asCheck(ID_CONFIRM_VOICE_CALL, YumiLocale.getString(R.string.YumiConfirmVoiceCall)).setChecked(YumiConfig.isConfirmVoiceCallEnabled()));
+        items.add(UItem.asCheck(ID_PROFILE_V2, YumiLocale.getString(R.string.YumiProfileV2)).setChecked(YumiConfig.isProfileV2Enabled()));
         items.add(UItem.asShadow(YumiLocale.getString(R.string.YumiHideStoriesInfo)));
     }
 
@@ -108,6 +110,10 @@ public class YumiInterfaceSettingsActivity extends UniversalFragment {
                 break;
             case ID_CONFIRM_VOICE_CALL:
                 YumiConfig.setConfirmVoiceCallEnabled(!YumiConfig.isConfirmVoiceCallEnabled());
+                updateList();
+                break;
+            case ID_PROFILE_V2:
+                YumiConfig.setProfileV2Enabled(!YumiConfig.isProfileV2Enabled());
                 updateList();
                 break;
         }
