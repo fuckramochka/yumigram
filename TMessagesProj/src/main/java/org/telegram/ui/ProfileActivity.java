@@ -166,6 +166,7 @@ import org.telegram.messenger.SendMessagesHelper;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.SvgHelper;
 import org.telegram.messenger.UserConfig;
+import org.telegram.messenger.yumigram.YumiConfig;
 import org.telegram.messenger.UserObject;
 import org.telegram.messenger.Utilities;
 import org.telegram.messenger.browser.Browser;
@@ -1260,6 +1261,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         public RadialGradient backgroundGradient;
         public final Matrix backgroundGradientMatrix = new Matrix();
         private final Paint backgroundPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint profileV2PatternPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
         public void setBackgroundColorId(MessagesController.PeerColor peerColor, boolean animated) {
             if (peerColor != null) {
@@ -1396,6 +1398,9 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     backgroundPaint.setAlpha((int) (0xFF * progressToGradient));
                     canvas.drawRect(0, 0, getMeasuredWidth(), y1, backgroundPaint);
                 }
+                if (userId != 0 && YumiConfig.isProfileV2Enabled()) {
+                    drawProfileV2Pattern(canvas, y1);
+                }
                 if (hasEmoji && !capturing) {
                     final float loadedScale = emojiLoadedT.set(isEmojiLoaded());
                     boolean shoudIgnore = openAnimationInProgress && playProfileAnimation == 2;
@@ -1436,6 +1441,56 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     canvas.drawRect(0, y1, getMeasuredWidth(), Math.min(v, mediaTop), gapPaint);
                 }
             }
+        }
+
+        private void drawProfileV2Pattern(Canvas canvas, int bottom) {
+            if (bottom <= 0 || getWidth() <= 0) {
+                return;
+            }
+            final int base = peerColor != null || Theme.isCurrentThemeDark() ? Color.WHITE : Color.BLACK;
+            profileV2PatternPaint.setColor(base);
+            profileV2PatternPaint.setAlpha(Theme.isCurrentThemeDark() || peerColor != null ? 15 : 9);
+            profileV2PatternPaint.setStyle(Paint.Style.STROKE);
+            profileV2PatternPaint.setStrokeWidth(dp(1));
+            profileV2PatternPaint.setStrokeCap(Paint.Cap.ROUND);
+            profileV2PatternPaint.setStrokeJoin(Paint.Join.ROUND);
+            final float stepX = dp(74);
+            final float stepY = dp(66);
+            final float size = dp(19);
+            canvas.save();
+            canvas.clipRect(0, 0, getWidth(), bottom);
+            for (int row = -1; row * stepY < bottom + stepY; row++) {
+                for (int column = -1; column * stepX < getWidth() + stepX; column++) {
+                    final float cx = column * stepX + ((row & 1) == 0 ? stepX * .5f : 0);
+                    final float cy = row * stepY + dp(30);
+                    final int kind = Math.abs(column * 7 + row * 3) % 3;
+                    if (kind == 0) {
+                        drawGiftMotif(canvas, cx, cy, size);
+                    } else if (kind == 1) {
+                        drawSparkleMotif(canvas, cx, cy, size * .55f);
+                    } else {
+                        drawGiftMotif(canvas, cx, cy, size * .72f);
+                    }
+                }
+            }
+            canvas.restore();
+        }
+
+        private void drawGiftMotif(Canvas canvas, float cx, float cy, float size) {
+            final float half = size * .5f;
+            final float ribbon = size * .18f;
+            canvas.drawRoundRect(cx - half, cy - half * .15f, cx + half, cy + half, dp(2), dp(2), profileV2PatternPaint);
+            canvas.drawLine(cx - half - dp(2), cy - half * .18f, cx + half + dp(2), cy - half * .18f, profileV2PatternPaint);
+            canvas.drawLine(cx, cy - half * .18f, cx, cy + half, profileV2PatternPaint);
+            canvas.drawOval(cx - ribbon, cy - half * .8f, cx, cy - half * .25f, profileV2PatternPaint);
+            canvas.drawOval(cx, cy - half * .8f, cx + ribbon, cy - half * .25f, profileV2PatternPaint);
+        }
+
+        private void drawSparkleMotif(Canvas canvas, float cx, float cy, float radius) {
+            canvas.drawLine(cx - radius, cy, cx + radius, cy, profileV2PatternPaint);
+            canvas.drawLine(cx, cy - radius, cx, cy + radius, profileV2PatternPaint);
+            canvas.drawLine(cx - radius * .58f, cy - radius * .58f, cx + radius * .58f, cy + radius * .58f, profileV2PatternPaint);
+            canvas.drawLine(cx - radius * .58f, cy + radius * .58f, cx + radius * .58f, cy - radius * .58f, profileV2PatternPaint);
         }
 
         private final Paint gapPaint = new Paint();

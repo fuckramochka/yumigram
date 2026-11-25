@@ -37,6 +37,7 @@ import androidx.core.graphics.ColorUtils;
 import androidx.core.math.MathUtils;
 
 import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.yumigram.YumiConfig;
 import org.telegram.messenger.BuildConfig;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
@@ -469,7 +470,7 @@ public class ProfileActionsView extends View {
     }
 
     public float getRoundRadius() {
-        return dp(16);
+        return YumiConfig.isProfileV2Enabled() && (mode == MODE_USER || mode == MODE_MY_PROFILE) ? dp(24) : dp(16);
     }
 
     private Action hit = null;

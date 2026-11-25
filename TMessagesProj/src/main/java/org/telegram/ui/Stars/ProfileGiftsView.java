@@ -50,6 +50,10 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
     private boolean active = true;
     public void setActive(boolean f) {
         this.active = f;
+        if (!f && pressedGift != null) {
+            pressedGift.bounce.setPressed(false);
+            pressedGift = null;
+        }
     }
 
     public ProfileGiftsView(Context context, int currentAccount, long dialogId, @NonNull View avatarContainer, ProfileActivity.AvatarImageView avatarImage, Theme.ResourcesProvider resourcesProvider) {
@@ -392,7 +396,7 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
 
     @Override
     protected void dispatchDraw(@NonNull Canvas canvas) {
-        if (gifts.isEmpty() || expandProgress >= 1.0f || collapseProgress <= 0f) return;
+        if (!YumiConfig.isProfileV2Enabled() || dialogId <= 0 || gifts.isEmpty() || expandProgress >= 1.0f || collapseProgress <= 0f) return;
 
         final float realX = avatarContainer.getX();
         final float realY = avatarContainer.getY();
@@ -498,7 +502,7 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-        if (!active) return false;
+        if (!active || !YumiConfig.isProfileV2Enabled() || dialogId <= 0) return false;
         final Gift hit = getGiftUnder(event.getX(), event.getY());
         if (event.getAction() == MotionEvent.ACTION_DOWN) {
             pressedGift = hit;
