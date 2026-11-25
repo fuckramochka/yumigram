@@ -11754,11 +11754,6 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             actionsView.clipHeight = avatarContainer.getY() + vh;
             actionsView.setAlpha(avatarAnimationProgress);
             actionsView.updatePosition(listView.getMeasuredWidth(), dp(74));
-        } else if (isProfileV2HeaderActive() && (hasMusic || hasBalance)) {
-            actionsView.clipHeight = -1;
-            float bottom = extraHeight + newTop;
-            float height = Math.min(dp(74), bottom - newTop);
-            actionsView.updatePosition(bottom - height, height);
         } else {
             actionsView.clipHeight = -1;
             float bottom = extraHeight + newTop - dp(hasMusic || hasBalance ? 25 : 0);
@@ -11794,7 +11789,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 musicView.setAlpha(avatarAnimationProgress);
             }
             float fadeHeight = Math.min(dp(21), Math.max(0, extraHeight));
-            float pillTop = newTop + extraHeight - dp(74 + 20 + 15);
+            float pillTop = newTop + extraHeight - dp(74 + 25 + 15 + 20);
             musicView.updatePosition(pillTop + dp(3.5f), fadeHeight);
         } else {
             if (openAnimationInProgress) {
