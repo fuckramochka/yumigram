@@ -58,6 +58,7 @@ public class ProfileActionsView extends View {
     private final List<Action> actions = new ArrayList<>();
     private final Paint paint = new Paint();
     private final Paint shaderPaint = new Paint();
+    private final Paint profileV2GlassOutlinePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private float parentExpanded;
 
     public boolean isAnimatingCallAction = false;
@@ -300,12 +301,24 @@ public class ProfileActionsView extends View {
                 continue;
             }
             AndroidUtilities.rectTmp.set(action.rect);
+            final boolean profileV2 = YumiConfig.isProfileV2Enabled() && (mode == MODE_USER || mode == MODE_MY_PROFILE);
+            final float backgroundRadius = profileV2 ? Math.min(dp(26), action.rect.width() * .5f) : r;
+            if (profileV2) {
+                final float radius = backgroundRadius;
+                AndroidUtilities.rectTmp.set(action.rect.centerX() - radius, action.rect.top + dp(1), action.rect.centerX() + radius, action.rect.top + dp(1) + radius * 2);
+            }
             AndroidUtilities.rectTmp.inset(
-                action.rect.width() / 2.0f * (1.0f - action.getScale()),
-                action.rect.height() / 2.0f * (1.0f - action.getScale())
+                AndroidUtilities.rectTmp.width() / 2.0f * (1.0f - action.getScale()),
+                AndroidUtilities.rectTmp.height() / 2.0f * (1.0f - action.getScale())
             );
             if (glassFactory != null) {
-                drawGlass(canvas, AndroidUtilities.rectTmp, r, action.getAlpha() * alphaFraction1);
+                drawGlass(canvas, AndroidUtilities.rectTmp, backgroundRadius, action.getAlpha() * alphaFraction1);
+                if (profileV2) {
+                    profileV2GlassOutlinePaint.setStyle(Paint.Style.STROKE);
+                    profileV2GlassOutlinePaint.setStrokeWidth(dp(1));
+                    profileV2GlassOutlinePaint.setColor(Theme.multAlpha(isButtonColorLight() ? 0x44000000 : 0x66FFFFFF, action.getAlpha() * alphaFraction1));
+                    canvas.drawRoundRect(AndroidUtilities.rectTmp, backgroundRadius, backgroundRadius, profileV2GlassOutlinePaint);
+                }
                 continue;
             }
             int wasAlpha = paint.getAlpha();
@@ -313,13 +326,13 @@ public class ProfileActionsView extends View {
             paint.setAlpha((int) (newAlpha * (radialGradient != null ? 0.1f : 1f)));
             paint.setShadowLayer(0, 0, 0, 0);
 
-            canvas.drawRoundRect(AndroidUtilities.rectTmp, r, r, paint);
+            canvas.drawRoundRect(AndroidUtilities.rectTmp, backgroundRadius, backgroundRadius, paint);
             if (radialGradient != null) {
                 int wasAlpha2 = shaderPaint.getAlpha();
                 shaderPaint.setAlpha((int) (action.getAlpha() * alphaFraction1 * wasAlpha2));
                 matrix.setTranslate(AndroidUtilities.rectTmp.left, AndroidUtilities.rectTmp.top);
                 radialGradient.setLocalMatrix(matrix);
-                canvas.drawRoundRect(AndroidUtilities.rectTmp, r, r, shaderPaint);
+                canvas.drawRoundRect(AndroidUtilities.rectTmp, backgroundRadius, backgroundRadius, shaderPaint);
                 shaderPaint.setAlpha(wasAlpha2);
             }
             paint.setAlpha(wasAlpha);
@@ -470,7 +483,7 @@ public class ProfileActionsView extends View {
     }
 
     public float getRoundRadius() {
-        return YumiConfig.isProfileV2Enabled() && (mode == MODE_USER || mode == MODE_MY_PROFILE) ? dp(24) : dp(16);
+        return YumiConfig.isProfileV2Enabled() && (mode == MODE_USER || mode == MODE_MY_PROFILE) ? dp(26) : dp(16);
     }
 
     private Action hit = null;

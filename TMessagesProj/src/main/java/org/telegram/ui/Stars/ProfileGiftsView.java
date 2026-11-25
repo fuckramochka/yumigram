@@ -8,12 +8,14 @@ import static org.telegram.ui.Stars.StarsController.findAttribute;
 import android.animation.TimeInterpolator;
 import android.content.Context;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.RadialGradient;
 import android.graphics.RectF;
 import android.graphics.Shader;
 import android.view.MotionEvent;
+import android.os.SystemClock;
 import android.view.View;
 import android.view.animation.DecelerateInterpolator;
 import android.view.animation.LinearInterpolator;
@@ -54,6 +56,7 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
             pressedGift.bounce.setPressed(false);
             pressedGift = null;
         }
+        invalidate();
     }
 
     public ProfileGiftsView(Context context, int currentAccount, long dialogId, @NonNull View avatarContainer, ProfileActivity.AvatarImageView avatarImage, Theme.ResourcesProvider resourcesProvider) {
@@ -215,6 +218,7 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
 
         public final RectF bounds = new RectF();
         public final ButtonBounce bounce = new ButtonBounce(ProfileGiftsView.this);
+        private final Paint bubblePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
         public void copy(Gift b) {
             gradient = b.gradient;
@@ -233,7 +237,7 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
                 float gradientAlpha
         ) {
             if (alpha <= 0.0f) return;
-            final float gsz = dp(45);
+            final float gsz = dp(54);
             bounds.set(cx - gsz / 2, cy - gsz / 2, cx + gsz / 2, cy + gsz / 2);
             canvas.save();
             canvas.translate(cx, cy);
@@ -246,8 +250,18 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
                 gradientPaint.setAlpha((int) (0xFF * alpha * gradientAlpha));
                 canvas.drawRect(-gsz / 2.0f, -gsz / 2.0f, gsz / 2.0f, gsz / 2.0f, gradientPaint);
             }
+            bubblePaint.setStyle(Paint.Style.FILL);
+            bubblePaint.setColor(Theme.multAlpha(color, .26f * alpha));
+            canvas.drawCircle(0, 0, gsz / 2f, bubblePaint);
+            bubblePaint.setStyle(Paint.Style.STROKE);
+            bubblePaint.setStrokeWidth(dp(1));
+            bubblePaint.setColor(Theme.multAlpha(Color.WHITE, .42f * alpha));
+            canvas.drawCircle(0, 0, gsz / 2f - dp(1), bubblePaint);
+            bubblePaint.setStyle(Paint.Style.FILL);
+            bubblePaint.setColor(Theme.multAlpha(Color.WHITE, .18f * alpha));
+            canvas.drawOval(-gsz * .28f, -gsz * .36f, gsz * .04f, -gsz * .24f, bubblePaint);
             if (emojiDrawable != null) {
-                final int sz = dp(24);
+                final int sz = dp(29);
                 emojiDrawable.setBounds(-sz / 2, -sz / 2, sz / 2, sz / 2);
                 emojiDrawable.setAlpha((int) (0xFF * alpha));
                 emojiDrawable.draw(canvas);
@@ -396,14 +410,14 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
 
     @Override
     protected void dispatchDraw(@NonNull Canvas canvas) {
-        if (!YumiConfig.isProfileV2Enabled() || dialogId <= 0 || gifts.isEmpty() || expandProgress >= 1.0f || collapseProgress <= 0f) return;
+        if (!active || !YumiConfig.isProfileV2Enabled() || dialogId <= 0 || gifts.isEmpty() || expandProgress >= 1.0f || collapseProgress <= 0f) return;
 
         final float realX = avatarContainer.getX();
         final float realY = avatarContainer.getY();
         final float realW = (avatarContainer.getWidth()) * avatarContainer.getScaleX();
         final float realH = (avatarContainer.getHeight()) * avatarContainer.getScaleY();
 
-        final float sz = dpf2(96);
+        final float sz = dpf2(YumiConfig.isProfileV2Enabled() ? 60 : 96);
         final float ax = Math.min(realX, (getWidth() - sz) / 2f);
         final float ay = Math.max(realY, (maxExpandY - sz) / 2f);
         final float aw = Math.max(realW, sz);
@@ -422,11 +436,13 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
         float expandScale = expandY / maxExpandY;
         float closedAlpha = Utilities.clamp01((expandY - (AndroidUtilities.statusBarHeight + ActionBar.getCurrentActionBarHeight())) / dp(50));
 
+        boolean animateVisibleGifts = false;
         for (int i = 0; i < gifts.size(); ++i) {
             final Gift gift = gifts.get(i);
             final float enter = gift.animatedFloat.set(1.0f);
             float scale = lerp(0.5f, 1.0f, enter);
             final float alpha = enter * (1.0f - expandProgress) * (1.0f - actionBarProgress) * (closedAlpha);
+            animateVisibleGifts |= alpha > 0.01f;
 
             float gx, gy;
             float delayValue;
@@ -484,10 +500,19 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
                 scale = AndroidUtilities.lerp(scale / 2f, scale, collapse);
             }
 
+            if (YumiConfig.isProfileV2Enabled()) {
+                final float phase = SystemClock.uptimeMillis() / 1050f + i * 1.47f;
+                gx += (float) Math.sin(phase) * dp(3.5f);
+                gy += (float) Math.cos(phase * .83f) * dp(5.5f);
+            }
+
             gift.draw(canvas, gx, gy, scale, 0, alpha, 1f);
         }
 
         canvas.restore();
+        if (animateVisibleGifts && active && YumiConfig.isProfileV2Enabled() && isAttachedToWindow()) {
+            postInvalidateDelayed(34);
+        }
     }
 
     public Gift getGiftUnder(float x, float y) {

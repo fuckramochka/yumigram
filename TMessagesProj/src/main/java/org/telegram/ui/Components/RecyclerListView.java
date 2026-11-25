@@ -3309,6 +3309,7 @@ public class RecyclerListView extends RecyclerView implements IBlur3Capture {
     private Utilities.CallbackReturn<View, Boolean> isSectionView;
     private Utilities.CallbackReturn<Integer, Boolean> isViewTypeSection;
     private Utilities.Callback5<Canvas, RectF, Float, Float, Float> drawSectionBackground;
+    private Integer sectionBackgroundColorOverride;
     public ArrayList<Long> forcedSections;
     private float sectionRadius;
     private float[] sectionRadiusTop, sectionRadiusBottom;
@@ -3830,7 +3831,45 @@ public class RecyclerListView extends RecyclerView implements IBlur3Capture {
         }
     }
     public void drawBackgroundRect(Canvas canvas, RectF rect, float topRadius, float bottomRadius, float alpha) {
-        drawBackgroundRect(canvas, rect, topRadius, bottomRadius, alpha, resourcesProvider);
+        if (sectionBackgroundColorOverride == null) {
+            drawBackgroundRect(canvas, rect, topRadius, bottomRadius, alpha, resourcesProvider);
+            return;
+        }
+        sectionBackgroundPaint.setShadowLayer(0, 0, 0, 0);
+        sectionBackgroundPaint.setColor(multAlpha(sectionBackgroundColorOverride, alpha));
+        if (topRadius <= 0 && bottomRadius <= 0) {
+            canvas.drawRect(rect, sectionBackgroundPaint);
+        } else if (topRadius == bottomRadius) {
+            canvas.drawRoundRect(rect, topRadius, topRadius, sectionBackgroundPaint);
+        } else {
+            sectionBackgroundPath.rewind();
+            radii[0] = radii[1] = radii[2] = radii[3] = topRadius;
+            radii[4] = radii[5] = radii[6] = radii[7] = bottomRadius;
+            sectionBackgroundPath.addRoundRect(rect, radii, Path.Direction.CW);
+            canvas.drawPath(sectionBackgroundPath, sectionBackgroundPaint);
+        }
+        sectionBackgroundStrokePaint.setStyle(Paint.Style.STROKE);
+        sectionBackgroundStrokePaint.setStrokeWidth(dp(1));
+        sectionBackgroundStrokePaint.setColor(Color.argb((int) (alpha * 34), 255, 255, 255));
+        if (topRadius <= 0 && bottomRadius <= 0) {
+            canvas.drawRect(rect, sectionBackgroundStrokePaint);
+        } else if (topRadius == bottomRadius) {
+            canvas.drawRoundRect(rect, topRadius, topRadius, sectionBackgroundStrokePaint);
+        } else {
+            sectionBackgroundPath.rewind();
+            radii[0] = radii[1] = radii[2] = radii[3] = topRadius;
+            radii[4] = radii[5] = radii[6] = radii[7] = bottomRadius;
+            sectionBackgroundPath.addRoundRect(rect, radii, Path.Direction.CW);
+            canvas.drawPath(sectionBackgroundPath, sectionBackgroundStrokePaint);
+        }
+    }
+
+    /** Overrides this list's rounded section surface without changing the app-wide theme colors. */
+    public void setSectionBackgroundColorOverride(@Nullable Integer color) {
+        if (sectionBackgroundColorOverride == null ? color != null : !sectionBackgroundColorOverride.equals(color)) {
+            sectionBackgroundColorOverride = color;
+            invalidate();
+        }
     }
 
     private final Path clipPath = new Path();

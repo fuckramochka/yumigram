@@ -45,6 +45,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.ColorFilter;
 import android.graphics.Matrix;
+import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.PixelFormat;
@@ -422,6 +423,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
     private int avatarColor;
     TimerDrawable autoDeleteItemDrawable;
     private ProfileGooeyView avatarGooey;
+    private View profileV2AvatarHaloView;
     private ProfileStoriesView storyView;
     public ProfileGiftsView giftsView;
 
@@ -434,6 +436,12 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         }
     };
     private Paint actionBarBackgroundPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint profileV2BackgroundPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint profileV2PatternPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Path profileV2CatPath = new Path();
+    private LinearGradient profileV2BackgroundGradient;
+    private LinearGradient profileV2HeaderGradient;
+    private int profileV2GradientWidth, profileV2GradientHeight, profileV2GradientOffset, profileV2GradientTop, profileV2GradientBottom;
     private ActionBarPopupWindow scrimPopupWindow;
     private Theme.ResourcesProvider resourcesProvider;
 
@@ -446,6 +454,90 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
     private int listContentHeight;
     private boolean openingAvatar;
     private boolean fragmentViewAttached;
+
+    private boolean isProfileV2User() {
+        return userId != 0 && !isTopic && YumiConfig.isProfileV2Enabled();
+    }
+
+    private boolean isProfileV2HeaderActive() {
+        return isProfileV2User() && !isPulledDown && !mediaHeaderVisible && mediaHeaderAnimationProgress <= 0f && !searchMode;
+    }
+
+    private void drawProfileV2ListBackground(Canvas canvas) {
+        final int width = listView.getWidth();
+        final int height = listView.getHeight();
+        if (width <= 0 || height <= 0) return;
+        updateProfileV2Gradients(width, height);
+        profileV2BackgroundPaint.setShader(profileV2BackgroundGradient);
+        canvas.drawRect(0, 0, width, height, profileV2BackgroundPaint);
+        drawProfileV2CatPattern(canvas, width, height, Theme.isCurrentThemeDark() || (topView != null && topView.hasColorById) ? Color.WHITE : Color.BLACK, Theme.isCurrentThemeDark() ? 23 : 18, -listView.getY());
+    }
+
+    private void drawProfileV2HeaderBackground(Canvas canvas) {
+        final int width = listView.getWidth();
+        final int height = listView.getHeight();
+        if (width <= 0 || height <= 0) return;
+        updateProfileV2Gradients(width, height);
+        profileV2BackgroundPaint.setShader(profileV2HeaderGradient);
+        canvas.drawRect(0, 0, width, height + listView.getY(), profileV2BackgroundPaint);
+    }
+
+    private void updateProfileV2Gradients(int width, int height) {
+        final boolean dark = Theme.isCurrentThemeDark();
+        final int topColor;
+        final int bottomColor;
+        if (topView != null && topView.hasColorById) {
+            topColor = ColorUtils.blendARGB(topView.color2, topView.color1, .28f);
+            bottomColor = Theme.adaptHSV(ColorUtils.blendARGB(topView.color1, topView.color2, .38f), 0f, dark ? -.13f : -.06f);
+        } else {
+            final int base = getThemedColor(Theme.key_windowBackgroundGray);
+            topColor = Theme.adaptHSV(base, 0f, dark ? -.025f : .045f);
+            bottomColor = Theme.adaptHSV(base, 0f, dark ? .11f : -.04f);
+        }
+
+        final int offset = Math.round(listView.getY());
+        if (profileV2BackgroundGradient == null || profileV2HeaderGradient == null || profileV2GradientWidth != width || profileV2GradientHeight != height || profileV2GradientOffset != offset || profileV2GradientTop != topColor || profileV2GradientBottom != bottomColor) {
+            profileV2GradientWidth = width;
+            profileV2GradientHeight = height;
+            profileV2GradientOffset = offset;
+            profileV2GradientTop = topColor;
+            profileV2GradientBottom = bottomColor;
+            profileV2BackgroundGradient = new LinearGradient(0, -offset, 0, height, topColor, bottomColor, Shader.TileMode.CLAMP);
+            profileV2HeaderGradient = new LinearGradient(0, 0, 0, height + offset, topColor, bottomColor, Shader.TileMode.CLAMP);
+        }
+    }
+
+    private void drawProfileV2CatPattern(Canvas canvas, int width, int height, int color, int alpha, float yOffset) {
+        if (width <= 0 || height <= 0) return;
+        profileV2PatternPaint.setColor(color);
+        profileV2PatternPaint.setAlpha(alpha);
+        profileV2PatternPaint.setStyle(Paint.Style.FILL);
+        final float stepX = dp(46);
+        final float stepY = dp(42);
+        final float size = dp(17);
+        canvas.save();
+        canvas.clipRect(0, 0, width, height);
+        for (int row = -1; row * stepY < height + stepY; row++) {
+            for (int column = -1; column * stepX < width + stepX; column++) {
+                final float cx = column * stepX + ((row & 1) == 0 ? stepX * .5f : 0f);
+                final float cy = row * stepY + dp(18) + yOffset;
+                profileV2CatPath.reset();
+                profileV2CatPath.moveTo(cx - size * .50f, cy - size * .18f);
+                profileV2CatPath.lineTo(cx - size * .47f, cy - size * .57f);
+                profileV2CatPath.quadTo(cx - size * .45f, cy - size * .69f, cx - size * .33f, cy - size * .58f);
+                profileV2CatPath.lineTo(cx - size * .14f, cy - size * .42f);
+                profileV2CatPath.quadTo(cx, cy - size * .48f, cx + size * .14f, cy - size * .42f);
+                profileV2CatPath.lineTo(cx + size * .33f, cy - size * .58f);
+                profileV2CatPath.quadTo(cx + size * .45f, cy - size * .69f, cx + size * .47f, cy - size * .57f);
+                profileV2CatPath.lineTo(cx + size * .50f, cy - size * .18f);
+                profileV2CatPath.quadTo(cx + size * .54f, cy + size * .42f, cx, cy + size * .48f);
+                profileV2CatPath.quadTo(cx - size * .54f, cy + size * .42f, cx - size * .50f, cy - size * .18f);
+                profileV2CatPath.close();
+                canvas.drawPath(profileV2CatPath, profileV2PatternPaint);
+            }
+        }
+        canvas.restore();
+    }
 
     private boolean doNotSetForeground;
     public boolean hasMainTabs;
@@ -1261,7 +1353,6 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         public RadialGradient backgroundGradient;
         public final Matrix backgroundGradientMatrix = new Matrix();
         private final Paint backgroundPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        private final Paint profileV2PatternPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
         public void setBackgroundColorId(MessagesController.PeerColor peerColor, boolean animated) {
             if (peerColor != null) {
@@ -1388,18 +1479,22 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 canvas.saveLayerAlpha(0, 0, getMeasuredWidth(), y1, (int) (0xFF * (1f - headerBlurFactor)));
             }
             if (y1 != 0) {
-                paint.setColor(currentColor);
-                updateBackgroundPaint();
-                final float progressToGradient = (playProfileAnimation == 0 ? 1f : avatarAnimationProgress) * hasColorAnimated.set(hasColorById);
-                if (progressToGradient < 1) {
-                    canvas.drawRect(0, 0, getMeasuredWidth(), y1, paint);
+                if (isProfileV2HeaderActive()) {
+                    drawProfileV2HeaderBackground(canvas);
+                } else {
+                    paint.setColor(currentColor);
+                    updateBackgroundPaint();
+                    final float progressToGradient = (playProfileAnimation == 0 ? 1f : avatarAnimationProgress) * hasColorAnimated.set(hasColorById);
+                    if (progressToGradient < 1) {
+                        canvas.drawRect(0, 0, getMeasuredWidth(), y1, paint);
+                    }
+                    if (progressToGradient > 0) {
+                        backgroundPaint.setAlpha((int) (0xFF * progressToGradient));
+                        canvas.drawRect(0, 0, getMeasuredWidth(), y1, backgroundPaint);
+                    }
                 }
-                if (progressToGradient > 0) {
-                    backgroundPaint.setAlpha((int) (0xFF * progressToGradient));
-                    canvas.drawRect(0, 0, getMeasuredWidth(), y1, backgroundPaint);
-                }
-                if (userId != 0 && YumiConfig.isProfileV2Enabled()) {
-                    drawProfileV2Pattern(canvas, y1);
+                if (isProfileV2HeaderActive()) {
+                    drawProfileV2CatPattern(canvas, getMeasuredWidth(), y1, Theme.isCurrentThemeDark() || peerColor != null ? Color.WHITE : Color.BLACK, Theme.isCurrentThemeDark() ? 23 : 18, 0);
                 }
                 if (hasEmoji && !capturing) {
                     final float loadedScale = emojiLoadedT.set(isEmojiLoaded());
@@ -1441,56 +1536,6 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     canvas.drawRect(0, y1, getMeasuredWidth(), Math.min(v, mediaTop), gapPaint);
                 }
             }
-        }
-
-        private void drawProfileV2Pattern(Canvas canvas, int bottom) {
-            if (bottom <= 0 || getWidth() <= 0) {
-                return;
-            }
-            final int base = peerColor != null || Theme.isCurrentThemeDark() ? Color.WHITE : Color.BLACK;
-            profileV2PatternPaint.setColor(base);
-            profileV2PatternPaint.setAlpha(Theme.isCurrentThemeDark() || peerColor != null ? 15 : 9);
-            profileV2PatternPaint.setStyle(Paint.Style.STROKE);
-            profileV2PatternPaint.setStrokeWidth(dp(1));
-            profileV2PatternPaint.setStrokeCap(Paint.Cap.ROUND);
-            profileV2PatternPaint.setStrokeJoin(Paint.Join.ROUND);
-            final float stepX = dp(74);
-            final float stepY = dp(66);
-            final float size = dp(19);
-            canvas.save();
-            canvas.clipRect(0, 0, getWidth(), bottom);
-            for (int row = -1; row * stepY < bottom + stepY; row++) {
-                for (int column = -1; column * stepX < getWidth() + stepX; column++) {
-                    final float cx = column * stepX + ((row & 1) == 0 ? stepX * .5f : 0);
-                    final float cy = row * stepY + dp(30);
-                    final int kind = Math.abs(column * 7 + row * 3) % 3;
-                    if (kind == 0) {
-                        drawGiftMotif(canvas, cx, cy, size);
-                    } else if (kind == 1) {
-                        drawSparkleMotif(canvas, cx, cy, size * .55f);
-                    } else {
-                        drawGiftMotif(canvas, cx, cy, size * .72f);
-                    }
-                }
-            }
-            canvas.restore();
-        }
-
-        private void drawGiftMotif(Canvas canvas, float cx, float cy, float size) {
-            final float half = size * .5f;
-            final float ribbon = size * .18f;
-            canvas.drawRoundRect(cx - half, cy - half * .15f, cx + half, cy + half, dp(2), dp(2), profileV2PatternPaint);
-            canvas.drawLine(cx - half - dp(2), cy - half * .18f, cx + half + dp(2), cy - half * .18f, profileV2PatternPaint);
-            canvas.drawLine(cx, cy - half * .18f, cx, cy + half, profileV2PatternPaint);
-            canvas.drawOval(cx - ribbon, cy - half * .8f, cx, cy - half * .25f, profileV2PatternPaint);
-            canvas.drawOval(cx, cy - half * .8f, cx + ribbon, cy - half * .25f, profileV2PatternPaint);
-        }
-
-        private void drawSparkleMotif(Canvas canvas, float cx, float cy, float radius) {
-            canvas.drawLine(cx - radius, cy, cx + radius, cy, profileV2PatternPaint);
-            canvas.drawLine(cx, cy - radius, cx, cy + radius, profileV2PatternPaint);
-            canvas.drawLine(cx - radius * .58f, cy - radius * .58f, cx + radius * .58f, cy + radius * .58f, profileV2PatternPaint);
-            canvas.drawLine(cx - radius * .58f, cy + radius * .58f, cx + radius * .58f, cy - radius * .58f, profileV2PatternPaint);
         }
 
         private final Paint gapPaint = new Paint();
@@ -4137,6 +4182,18 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             private VelocityTracker velocityTracker;
 
             @Override
+            public void onDraw(Canvas canvas) {
+                if (isProfileV2HeaderActive()) {
+                    final boolean darkSurface = Theme.isCurrentThemeDark() || topView != null && topView.hasColorById;
+                    setSectionBackgroundColorOverride(ColorUtils.setAlphaComponent(darkSurface ? Color.BLACK : Color.WHITE, darkSurface ? 70 : 216));
+                    drawProfileV2ListBackground(canvas);
+                } else {
+                    setSectionBackgroundColorOverride(null);
+                }
+                super.onDraw(canvas);
+            }
+
+            @Override
             protected boolean canHighlightChildAt(View child, float x, float y) {
                 return !(child instanceof AboutLinkCell);
             }
@@ -4250,6 +4307,9 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         // the rows above the list's top go under the header's blur, with their cards
         listView.setSectionsOverscanTop(AndroidUtilities.statusBarHeight + ActionBar.getCurrentActionBarHeight());
         ThemeBind.backgroundColor(listView, Theme.key_windowBackgroundGray, resourcesProvider);
+        listView.setSectionBackgroundColorOverride(isProfileV2User()
+                ? ColorUtils.setAlphaComponent(Color.BLACK, Theme.isCurrentThemeDark() ? 72 : 42)
+                : null);
         listView.setVerticalScrollBarEnabled(false);
         final IBlur3Capture listViewCapture = new ViewGroupPartRenderer(listView, (ViewGroup) fragmentView, (canvas, child, drawingTime) -> {
             if (child == sharedMediaLayout) {
@@ -5258,6 +5318,19 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             public void setScaleX(float scaleX) {
                 super.setScaleX(scaleX);
                 updateGooey();
+                if (profileV2AvatarHaloView != null) profileV2AvatarHaloView.invalidate();
+            }
+
+            @Override
+            public void setTranslationX(float translationX) {
+                super.setTranslationX(translationX);
+                if (profileV2AvatarHaloView != null) profileV2AvatarHaloView.invalidate();
+            }
+
+            @Override
+            public void setTranslationY(float translationY) {
+                super.setTranslationY(translationY);
+                if (profileV2AvatarHaloView != null) profileV2AvatarHaloView.invalidate();
             }
 
             @Override
@@ -5364,6 +5437,56 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         avatarContainer.setPivotX(0);
         avatarContainer.setPivotY(0);
         avatarGooey = new ProfileGooeyView(context);
+        avatarGooey.setClipChildren(false);
+        profileV2AvatarHaloView = new View(context) {
+            private final Paint cyanPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            private final Paint violetPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            private final Paint rimPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            private final Matrix shaderMatrix = new Matrix();
+            private float shaderRadius = -1;
+            private int shaderColor1, shaderColor2;
+            private RadialGradient cyanGradient;
+            private RadialGradient violetGradient;
+
+            {
+                rimPaint.setStyle(Paint.Style.STROKE);
+                rimPaint.setStrokeWidth(dp(1.5f));
+                rimPaint.setColor(0xBFFFFFFF);
+            }
+
+            @Override
+            protected void onDraw(Canvas canvas) {
+                if (!isProfileV2HeaderActive() || avatarContainer == null || avatarContainer.getVisibility() != View.VISIBLE || expandProgress > .25f || isPulledDown) {
+                    return;
+                }
+                final float scaleX = avatarContainer.getScaleX();
+                final float scaleY = avatarContainer.getScaleY();
+                final float cx = avatarGooey.getX() + avatarContainer.getX() + avatarContainer.getWidth() * scaleX * .5f;
+                final float cy = avatarGooey.getY() + avatarContainer.getY() + avatarContainer.getHeight() * scaleY * .5f;
+                final float radius = Math.max(avatarContainer.getWidth() * scaleX, avatarContainer.getHeight() * scaleY) * .72f;
+                if (radius <= 0) return;
+                final int themeAccent = getThemedColor(Theme.key_profile_verifiedBackground);
+                final int glowColor1 = topView != null && topView.hasColorById ? Theme.adaptHSV(topView.color1, 0f, .38f) : Theme.adaptHSV(themeAccent, .18f, .45f);
+                final int glowColor2 = topView != null && topView.hasColorById ? Theme.adaptHSV(topView.color2, 0f, .28f) : Theme.adaptHSV(themeAccent, -.18f, .3f);
+                if (Math.abs(shaderRadius - radius) > .5f || glowColor1 != shaderColor1 || glowColor2 != shaderColor2) {
+                    shaderRadius = radius;
+                    shaderColor1 = glowColor1;
+                    shaderColor2 = glowColor2;
+                    cyanGradient = new RadialGradient(0, 0, radius, new int[]{Theme.multAlpha(glowColor1, .48f), Theme.multAlpha(glowColor1, .27f), Theme.multAlpha(glowColor1, 0f)}, new float[]{0f, .62f, 1f}, Shader.TileMode.CLAMP);
+                    violetGradient = new RadialGradient(0, 0, radius, new int[]{Theme.multAlpha(glowColor2, .48f), Theme.multAlpha(glowColor2, .27f), Theme.multAlpha(glowColor2, 0f)}, new float[]{0f, .62f, 1f}, Shader.TileMode.CLAMP);
+                    cyanPaint.setShader(cyanGradient);
+                    violetPaint.setShader(violetGradient);
+                }
+                shaderMatrix.setTranslate(cx - radius * .22f, cy);
+                cyanGradient.setLocalMatrix(shaderMatrix);
+                shaderMatrix.setTranslate(cx + radius * .22f, cy + dp(2));
+                violetGradient.setLocalMatrix(shaderMatrix);
+                canvas.drawCircle(cx - radius * .22f, cy, radius, cyanPaint);
+                canvas.drawCircle(cx + radius * .22f, cy + dp(2), radius, violetPaint);
+                canvas.drawCircle(cx, cy, radius * .68f, rimPaint);
+            }
+        };
+        avatarContainer2.addView(profileV2AvatarHaloView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
         avatarGooey.addView(avatarContainer, LayoutHelper.createFrame(100, 100, Gravity.TOP | Gravity.LEFT));
         avatarContainer2.addView(avatarGooey, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
 //        avatarContainer2.addView(avatarContainer, LayoutHelper.createFrame(100, 100, Gravity.TOP | Gravity.LEFT, 64, 0, 0, 0));
@@ -5679,7 +5802,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         }
         avatarContainer2.addView(storyView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
         giftsView = new ProfileGiftsView(context, currentAccount, getDialogId(), avatarContainer, avatarImage, resourcesProvider);
-        avatarContainer2.addView(giftsView, 0, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+        avatarContainer2.addView(giftsView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
         updateProfileData(true);
 
         writeButton = new RLottieImageView(context);
