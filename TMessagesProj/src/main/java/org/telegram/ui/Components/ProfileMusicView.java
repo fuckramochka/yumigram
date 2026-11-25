@@ -47,6 +47,8 @@ public class ProfileMusicView extends View {
     private final PorterDuffColorFilter filterColorBlack = new PorterDuffColorFilter(Color.BLACK, PorterDuff.Mode.SRC_IN);
 
     private Text author, title;
+    private CharSequence authorText, titleText;
+    private boolean profileV2;
     private ProfileMusicView trailingView;
     private ProfileMusicView leadingView;
 
@@ -215,10 +217,21 @@ public class ProfileMusicView extends View {
     }
 
     public void setText(CharSequence author, CharSequence title) {
-        this.author = new Text(author, 11, AndroidUtilities.bold());
-        this.title = new Text(title, 11);
+        authorText = author;
+        titleText = title;
+        this.author = new Text(author, profileV2 ? 12 : 11, AndroidUtilities.bold());
+        this.title = new Text(title, profileV2 ? 12 : 11);
 
         setContentDescription(getString(R.string.AccDescrProfileMusic) + " " + author + " — " + title);
+    }
+
+    public void setProfileV2(boolean enabled) {
+        if (profileV2 == enabled) return;
+        profileV2 = enabled;
+        if (authorText != null && titleText != null) {
+            setText(authorText, titleText);
+        }
+        invalidate();
     }
 
     /** The pill's glass, like the action buttons'; without it the pill is filled with their color. */
@@ -340,7 +353,9 @@ public class ProfileMusicView extends View {
             left = (getWidth() - containerWidth) / 2f;
         }
 
-        rect.set(left, dp(10), left + containerWidth, dp(10) + dp(17) * alpha);
+        final float pillHeight = dp(profileV2 ? 20 : 17);
+        final float pillTop = dp(profileV2 ? 8.5f : 10);
+        rect.set(left, pillTop, left + containerWidth, pillTop + pillHeight * alpha);
         canvas.save();
         canvas.scale(scale, scale, rect.centerX(), getHeight() / 2f);
 

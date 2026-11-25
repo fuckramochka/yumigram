@@ -3919,6 +3919,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
 //        sharedMediaLayout.setBackgroundColor(getThemedColor(Theme.key_windowBackgroundWhite));
         if (userId == 0 || imageUpdater == null || myProfile) {
             musicView = new ProfileMusicView(context, resourcesProvider);
+            musicView.setProfileV2(isProfileV2User());
             balanceView = new ProfileBalanceView(context, resourcesProvider);
             musicView.setTrailingView(balanceView);
             if (buttonsGlass != null) {
@@ -8904,6 +8905,9 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         + ActionBar.getCurrentActionBarHeight()
                         - dp(21)
                         + actionBar.getTranslationY();
+                if (isProfileV2HeaderActive()) {
+                    startY += dp(12);
+                }
                 avatarY = lerp(endY, startY, diff);
             } else {
                 avatarY = endNameY;
@@ -8912,7 +8916,8 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             float h = openAnimationInProgress ? initialAnimationExtraHeight : extraHeight;
             if (h > headerExtraHeight || isPulledDown) {
                 expandProgress = Math.max(0f, Math.min(1f, (h - headerExtraHeight) / (listView.getMeasuredWidth() - newTop - getHeaderOnlyExtraHeight())));
-                avatarScale = lerp(96 / 42f, 138 / 42f, Math.min(1f, expandProgress * 3f)) / 100f * 42f;
+                final float closedAvatarSize = isProfileV2HeaderActive() ? 118f : 96f;
+                avatarScale = lerp(closedAvatarSize / 42f, 138 / 42f, Math.min(1f, expandProgress * 3f)) / 100f * 42f;
                 pullUpProgress = 0.0f;
 
                 if (storyView != null) {
@@ -9110,7 +9115,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 nameTextView.setScaleX(1.38f);
                 nameTextView.setScaleY(1.38f);
 
-                avatarScale = lerp(42, 138, avatarAnimationProgress) / 100f;
+                avatarScale = lerp(42, isProfileV2HeaderActive() ? 118 : 138, avatarAnimationProgress) / 100f;
                 pullUpProgress = 0.0f;
                 if (storyView != null) {
                     storyView.setExpandProgress(1f);
@@ -9165,11 +9170,11 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 updateCollectibleHint();
             } else if (h <= headerExtraHeight) {
                 if (openAnimationInProgress) {
-                    avatarScale = lerp(42, 96, diff) / 100f;
+                    avatarScale = lerp(42, isProfileV2HeaderActive() ? 118 : 96, diff) / 100f;
                     pullUpProgress = 0.0f;
                 } else {
                     final float intoSize = avatarGooey != null ? avatarGooey.getHiddenAvatarSizeDp() : 24f;
-                    avatarScale = lerp(intoSize, 96, diff) / 100f;
+                    avatarScale = lerp(intoSize, isProfileV2HeaderActive() ? 118 : 96, diff) / 100f;
                     pullUpProgress = 1.0f - diff;
                 }
 
@@ -9291,8 +9296,8 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 - dp(21)
                 + actionBar.getTranslationY();
 
-        avatarY = endNameY;
-        avatarScale = 138 / 100f;
+        avatarY = endNameY + (isProfileV2HeaderActive() ? dp(12) : 0);
+        avatarScale = (isProfileV2HeaderActive() ? 118 : 138) / 100f;
         pullUpProgress = 0.0f;
         fixAvatarImageInCenter();
 
@@ -9354,10 +9359,11 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
     private void refreshNameAndOnlineYBasedOnExpand(float diff, float newTop) {
         float scale;
         float expand = Math.max(0f, Math.min(1f, (extraHeight - getHeaderExtraHeight()) / (listView.getMeasuredWidth() - newTop - getHeaderOnlyExtraHeight())));
+        final float closedAvatarSize = isProfileV2HeaderActive() ? 118f : 96f;
         if (extraHeight < getHeaderExtraHeight() && expand < 0.33f) {
-            scale = (24 + (54f + (42 - 24)) * diff) / 42.0f;
+            scale = (24 + (closedAvatarSize - 24) * diff) / 42.0f;
         } else {
-            scale = AndroidUtilities.lerp((42f + 54f) / 42f, (42f + 42f + 54f) / 42f, Math.min(1f, expand * 3f));
+            scale = AndroidUtilities.lerp(closedAvatarSize / 42f, 138f / 42f, Math.min(1f, expand * 3f));
         }
 
         float endNameY = (actionBar.getOccupyStatusBar() ? AndroidUtilities.statusBarHeight : 0)
