@@ -17,6 +17,7 @@ import android.graphics.Shader;
 import android.view.MotionEvent;
 import android.os.SystemClock;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.animation.DecelerateInterpolator;
 import android.view.animation.LinearInterpolator;
 
@@ -69,6 +70,7 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
         this.avatarImage = avatarImage;
 
         this.resourcesProvider = resourcesProvider;
+        touchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
     }
 
     public float expandProgress, collapseProgress;
@@ -104,6 +106,11 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
     private float left, right, cy;
     private float expandY, maxExpandY;
     private final AnimatedFloat rightAnimated = new AnimatedFloat(this, 0, 350, CubicBezierInterpolator.EASE_OUT_QUINT);
+    private final int touchSlop;
+    private float downX, downY, lastX, lastY;
+    private long lastTouchTime;
+    private int activePointerId = MotionEvent.INVALID_POINTER_ID;
+    private boolean gestureOwned, gestureDragged;
 
     public void setBounds(float left, float right, float cy, boolean animated, int maxExpandY) {
         boolean changed = Math.abs(left - this.left) > 0.1f || Math.abs(right - this.right) > 0.1f || Math.abs(cy - this.cy) > 0.1f;
@@ -207,7 +214,7 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
         }
 
         public boolean equals(Gift b) {
-            return b != null && b.id == id;
+            return b != null && b.id == id && b.documentId == documentId && b.color == color && java.util.Objects.equals(b.slug, slug);
         }
 
         public RadialGradient gradient;
@@ -219,6 +226,10 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
         public final RectF bounds = new RectF();
         public final ButtonBounce bounce = new ButtonBounce(ProfileGiftsView.this);
         private final Paint bubblePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private float dragX, dragY, velocityX, velocityY, dragOffsetX, dragOffsetY;
+        private float tilt;
+        private boolean dragging, returning;
+        private long physicsTime;
 
         public void copy(Gift b) {
             gradient = b.gradient;
@@ -248,18 +259,27 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
             particles.draw(canvas, color, alpha);
             if (gradientPaint != null) {
                 gradientPaint.setAlpha((int) (0xFF * alpha * gradientAlpha));
-                canvas.drawRect(-gsz / 2.0f, -gsz / 2.0f, gsz / 2.0f, gsz / 2.0f, gradientPaint);
+                canvas.drawCircle(0, 0, gsz / 2f, gradientPaint);
             }
             bubblePaint.setStyle(Paint.Style.FILL);
-            bubblePaint.setColor(Theme.multAlpha(color, .26f * alpha));
+            bubblePaint.setColor(Theme.multAlpha(color, .13f * alpha));
             canvas.drawCircle(0, 0, gsz / 2f, bubblePaint);
             bubblePaint.setStyle(Paint.Style.STROKE);
-            bubblePaint.setStrokeWidth(dp(1));
-            bubblePaint.setColor(Theme.multAlpha(Color.WHITE, .42f * alpha));
-            canvas.drawCircle(0, 0, gsz / 2f - dp(1), bubblePaint);
+            bubblePaint.setStrokeWidth(dp(2.1f));
+            bubblePaint.setShader(new android.graphics.SweepGradient(0, 0,
+                    new int[]{Theme.multAlpha(0xFFFF8DE1, .72f * alpha), Theme.multAlpha(0xFF8DEEFF, .72f * alpha),
+                            Theme.multAlpha(0xFFFFF1A8, .58f * alpha), Theme.multAlpha(0xFFB99CFF, .68f * alpha),
+                            Theme.multAlpha(0xFFFF8DE1, .72f * alpha)}, null));
+            canvas.drawCircle(0, 0, gsz / 2f - dp(1.2f), bubblePaint);
+            bubblePaint.setShader(null);
+            bubblePaint.setStrokeWidth(dp(.8f));
+            bubblePaint.setColor(Theme.multAlpha(Color.WHITE, .48f * alpha));
+            canvas.drawArc(-gsz * .42f, -gsz * .42f, gsz * .42f, gsz * .42f, 205, 94, false, bubblePaint);
             bubblePaint.setStyle(Paint.Style.FILL);
-            bubblePaint.setColor(Theme.multAlpha(Color.WHITE, .18f * alpha));
-            canvas.drawOval(-gsz * .28f, -gsz * .36f, gsz * .04f, -gsz * .24f, bubblePaint);
+            bubblePaint.setColor(Theme.multAlpha(Color.WHITE, .3f * alpha));
+            canvas.drawOval(-gsz * .31f, -gsz * .37f, -gsz * .01f, -gsz * .26f, bubblePaint);
+            bubblePaint.setColor(Theme.multAlpha(0xFFB4F6FF, .12f * alpha));
+            canvas.drawOval(gsz * .13f, gsz * .12f, gsz * .4f, gsz * .35f, bubblePaint);
             if (emojiDrawable != null) {
                 final int sz = dp(29);
                 emojiDrawable.setBounds(-sz / 2, -sz / 2, sz / 2, sz / 2);
@@ -267,6 +287,8 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
                 emojiDrawable.draw(canvas);
             }
             canvas.restore();
+            final float hitRadius = gsz * .5f * Math.abs(scale);
+            bounds.set(cx - hitRadius, cy - hitRadius, cx + hitRadius, cy + hitRadius);
         }
     }
 
@@ -337,9 +359,15 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
                 }
             }
 
-            if (oldGift != null) {
+            if (oldGift != null && oldGift.equals(g)) {
                 g.copy(oldGift);
             } else {
+                if (oldGift != null) {
+                    g.position = oldGift.position;
+                    if (oldGift.emojiDrawable != null) {
+                        oldGift.emojiDrawable.removeView(this);
+                    }
+                }
                 g.gradient = new RadialGradient(0, 0, dp(22.5f), new int[]{g.color, Theme.multAlpha(g.color, 0.0f)}, new float[]{0, 1}, Shader.TileMode.CLAMP);
                 g.gradientPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
                 g.gradientPaint.setShader(g.gradient);
@@ -500,13 +528,48 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
                 scale = AndroidUtilities.lerp(scale / 2f, scale, collapse);
             }
 
-            if (YumiConfig.isProfileV2Enabled()) {
+            if (gift.dragging) {
+                gx = gift.dragX;
+                gy = gift.dragY;
+            } else if (gift.returning) {
+                final long now = SystemClock.uptimeMillis();
+                final float dt = Math.min(.04f, Math.max(.001f, (now - gift.physicsTime) / 1000f));
+                gift.physicsTime = now;
+                final float dx = gx - gift.dragX;
+                final float dy = gy - gift.dragY;
+                gift.velocityX += (dx * 32f - gift.velocityX * 8.8f) * dt;
+                gift.velocityY += (dy * 32f - gift.velocityY * 8.8f) * dt;
+                gift.dragX += gift.velocityX * dt;
+                gift.dragY += gift.velocityY * dt;
+                gx = gift.dragX;
+                gy = gift.dragY;
+                if (Math.abs(dx) < dp(.8f) && Math.abs(dy) < dp(.8f) && Math.abs(gift.velocityX) + Math.abs(gift.velocityY) < dp(8)) {
+                    gift.returning = false;
+                    gift.velocityX = gift.velocityY = 0;
+                } else {
+                    animateVisibleGifts = true;
+                }
+            } else if (YumiConfig.isProfileV2Enabled()) {
                 final float phase = SystemClock.uptimeMillis() / 1050f + i * 1.47f;
                 gx += (float) Math.sin(phase) * dp(3.5f);
                 gy += (float) Math.cos(phase * .83f) * dp(5.5f);
             }
 
-            gift.draw(canvas, gx, gy, scale, 0, alpha, 1f);
+            float depthScale;
+            switch (gift.position) {
+                case 0: depthScale = .88f; break;
+                case 1: depthScale = 1f; break;
+                case 2: depthScale = .78f; break;
+                case 3: depthScale = 1.06f; break;
+                case 4: depthScale = .82f; break;
+                default: depthScale = .94f; break;
+            }
+            if (gift.dragging) {
+                gift.tilt = Math.max(-14f, Math.min(14f, gift.velocityX / dp(24f)));
+            } else {
+                gift.tilt *= .86f;
+            }
+            gift.draw(canvas, gx, gy, scale * depthScale, gift.tilt, alpha, 1f);
         }
 
         canvas.restore();
@@ -516,9 +579,12 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
     }
 
     public Gift getGiftUnder(float x, float y) {
-        for (int i = 0; i < gifts.size(); ++i) {
-            if (gifts.get(i).bounds.contains(x, y))
-                return gifts.get(i);
+        for (int i = gifts.size() - 1; i >= 0; --i) {
+            Gift gift = gifts.get(i);
+            final float dx = x - gift.bounds.centerX();
+            final float dy = y - gift.bounds.centerY();
+            if (gift.bounds.contains(x, y) && dx * dx + dy * dy <= gift.bounds.width() * gift.bounds.width() * .25f)
+                return gift;
         }
         return null;
     }
@@ -528,30 +594,82 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         if (!active || !YumiConfig.isProfileV2Enabled() || dialogId <= 0) return false;
-        final Gift hit = getGiftUnder(event.getX(), event.getY());
-        if (event.getAction() == MotionEvent.ACTION_DOWN) {
-            pressedGift = hit;
+        final int action = event.getActionMasked();
+        if (action == MotionEvent.ACTION_DOWN) {
+            pressedGift = getGiftUnder(event.getX(), event.getY());
+            gestureOwned = pressedGift != null;
+            gestureDragged = false;
+            activePointerId = event.getPointerId(0);
+            downX = lastX = event.getX();
+            downY = lastY = event.getY();
+            lastTouchTime = event.getEventTime();
             if (pressedGift != null) {
                 pressedGift.bounce.setPressed(true);
+                pressedGift.dragOffsetX = pressedGift.bounds.centerX() - downX;
+                pressedGift.dragOffsetY = pressedGift.bounds.centerY() - downY;
+                pressedGift.velocityX = pressedGift.velocityY = 0;
+                pressedGift.returning = false;
+                return true;
             }
-        } else if (event.getAction() == MotionEvent.ACTION_MOVE) {
-            if (pressedGift != hit && pressedGift != null) {
+            return false;
+        } else if (action == MotionEvent.ACTION_MOVE && gestureOwned && pressedGift != null) {
+            final int pointerIndex = event.findPointerIndex(activePointerId);
+            if (pointerIndex < 0) return true;
+            final float x = event.getX(pointerIndex);
+            final float y = event.getY(pointerIndex);
+            if (!gestureDragged && Math.hypot(x - downX, y - downY) > touchSlop) {
+                gestureDragged = true;
+                pressedGift.dragging = true;
                 pressedGift.bounce.setPressed(false);
-                pressedGift = null;
+                requestDisallowInterceptTouchEvent(true);
             }
-        } else if (event.getAction() == MotionEvent.ACTION_UP) {
-            if (pressedGift != null) {
+            if (gestureDragged) {
+                final float dt = Math.max(.001f, (event.getEventTime() - lastTouchTime) / 1000f);
+                final float radius = dp(27f);
+                pressedGift.dragX = Math.max(radius, Math.min(getWidth() - radius, x + pressedGift.dragOffsetX));
+                pressedGift.dragY = Math.max(radius, Math.min(getHeight() - radius, y + pressedGift.dragOffsetY));
+                pressedGift.velocityX = (pressedGift.dragX - (lastX + pressedGift.dragOffsetX)) / dt;
+                pressedGift.velocityY = (pressedGift.dragY - (lastY + pressedGift.dragOffsetY)) / dt;
+                lastX = x;
+                lastY = y;
+                lastTouchTime = event.getEventTime();
+                invalidate();
+            }
+            return true;
+        } else if ((action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_POINTER_UP) && gestureOwned && pressedGift != null) {
+            if (action == MotionEvent.ACTION_UP && !gestureDragged) {
                 onGiftClick(pressedGift);
                 pressedGift.bounce.setPressed(false);
-                pressedGift = null;
+            } else {
+                pressedGift.dragging = false;
+                pressedGift.returning = true;
+                pressedGift.physicsTime = SystemClock.uptimeMillis();
+                pressedGift.velocityX *= .48f;
+                pressedGift.velocityY *= .48f;
             }
-        } else if (event.getAction() == MotionEvent.ACTION_CANCEL) {
+            pressedGift = null;
+            gestureOwned = gestureDragged = false;
+            activePointerId = MotionEvent.INVALID_POINTER_ID;
+            requestDisallowInterceptTouchEvent(false);
+            invalidate();
+            return true;
+        } else if (action == MotionEvent.ACTION_CANCEL) {
             if (pressedGift != null) {
                 pressedGift.bounce.setPressed(false);
+                if (pressedGift.dragging) {
+                    pressedGift.dragging = false;
+                    pressedGift.returning = true;
+                    pressedGift.physicsTime = SystemClock.uptimeMillis();
+                }
                 pressedGift = null;
             }
+            gestureOwned = gestureDragged = false;
+            activePointerId = MotionEvent.INVALID_POINTER_ID;
+            requestDisallowInterceptTouchEvent(false);
+            invalidate();
+            return true;
         }
-        return pressedGift != null;
+        return gestureOwned;
     }
 
     public void onGiftClick(Gift gift) {
