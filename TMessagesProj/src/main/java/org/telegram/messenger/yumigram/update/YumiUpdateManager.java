@@ -4,9 +4,12 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageInfo;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.Settings;
 import android.text.TextUtils;
 
 import androidx.core.content.FileProvider;
@@ -15,11 +18,9 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
+import org.telegram.messenger.BuildConfig;
 import org.telegram.messenger.FileLog;
-import org.telegram.messenger.LocaleController;
-import org.telegram.messenger.R;
 import org.telegram.messenger.Utilities;
-import org.telegram.ui.Components.BulletinFactory;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -28,6 +29,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.ArrayList;
 
 /**
  * High-performance, reliable Auto-Update Manager for Yumigram (Юмиграм).
@@ -38,13 +40,22 @@ import java.net.URL;
 public class YumiUpdateManager {
 
     private static final String TAG = "YumiUpdateManager";
-    public static final String CURRENT_VERSION = "v1.0.25";
+    public static final String CURRENT_VERSION = "v" + BuildConfig.YUMI_VERSION;
     public static final String GITHUB_REPO = "fuckramochka/yumigram";
     public static final String GITHUB_API_URL = "https://api.github.com/repos/" + GITHUB_REPO + "/releases/latest";
 
     private static final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private static final String PREFS_NAME = "yumi_update_manager";
+    private static final String KEY_LAST_AUTO_CHECK = "last_auto_check";
+    private static final String KEY_LAST_AUTO_CHECK_SUCCESS = "last_auto_check_success";
+    private static final String KEY_LAST_NOTIFIED_TAG = "last_notified_tag";
+    private static final long AUTO_CHECK_INTERVAL_MS = 6L * 60L * 60L * 1000L;
+    private static final long AUTO_RETRY_INTERVAL_MS = 15L * 60L * 1000L;
     private static volatile boolean isDownloading = false;
     private static volatile UpdateInfo cachedUpdate = null;
+    private static volatile boolean cachedHasUpdate;
+    private static boolean isChecking;
+    private static final ArrayList<CheckCallback> pendingCheckCallbacks = new ArrayList<>();
 
     public static class UpdateInfo {
         public final String tagName;
@@ -74,12 +85,21 @@ public class YumiUpdateManager {
 
             int max = Math.max(newParts.length, currParts.length);
             for (int i = 0; i < max; i++) {
-                int n = i < newParts.length && !newParts[i].isEmpty() ? Integer.parseInt(newParts[i]) : 0;
-                int c = i < currParts.length && !currParts[i].isEmpty() ? Integer.parseInt(currParts[i]) : 0;
+                long n = parseVersionPart(newParts, i);
+                long c = parseVersionPart(currParts, i);
                 if (n > c) return true;
                 if (n < c) return false;
             }
             return false;
+        }
+
+        private static long parseVersionPart(String[] parts, int index) {
+            if (index >= parts.length || parts[index].isEmpty()) return 0;
+            try {
+                return Long.parseLong(parts[index]);
+            } catch (NumberFormatException ignored) {
+                return Long.MAX_VALUE;
+            }
         }
     }
 
@@ -99,6 +119,15 @@ public class YumiUpdateManager {
         return cachedUpdate;
     }
 
+    /** Returns true once per release tag so resuming the app cannot repeat the same bulletin. */
+    public static boolean shouldNotifyUpdate(String tagName) {
+        if (TextUtils.isEmpty(tagName) || ApplicationLoader.applicationContext == null) return false;
+        final SharedPreferences preferences = ApplicationLoader.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        if (tagName.equals(preferences.getString(KEY_LAST_NOTIFIED_TAG, null))) return false;
+        preferences.edit().putString(KEY_LAST_NOTIFIED_TAG, tagName).apply();
+        return true;
+    }
+
     public static boolean isDownloading() {
         return isDownloading;
     }
@@ -107,10 +136,34 @@ public class YumiUpdateManager {
      * Checks for the latest release on GitHub in the background.
      */
     public static void checkUpdate(boolean manual, CheckCallback callback) {
+        synchronized (pendingCheckCallbacks) {
+            if (!manual && ApplicationLoader.applicationContext != null) {
+                final SharedPreferences preferences = ApplicationLoader.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+                final long now = System.currentTimeMillis();
+                final long lastAttempt = preferences.getLong(KEY_LAST_AUTO_CHECK, 0);
+                final long lastSuccess = preferences.getLong(KEY_LAST_AUTO_CHECK_SUCCESS, 0);
+                if (now - lastAttempt < AUTO_RETRY_INTERVAL_MS || now - lastSuccess < AUTO_CHECK_INTERVAL_MS) {
+                    if (cachedUpdate != null && callback != null) {
+                        final UpdateInfo update = cachedUpdate;
+                        final boolean hasUpdate = cachedHasUpdate;
+                        mainHandler.post(() -> callback.onSuccess(update, hasUpdate));
+                    }
+                    return;
+                }
+            }
+            if (ApplicationLoader.applicationContext != null) {
+                ApplicationLoader.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                        .edit().putLong(KEY_LAST_AUTO_CHECK, System.currentTimeMillis()).apply();
+            }
+            if (callback != null) pendingCheckCallbacks.add(callback);
+            if (isChecking) return;
+            isChecking = true;
+        }
         Utilities.globalQueue.postRunnable(() -> {
+            HttpURLConnection conn = null;
             try {
                 URL url = new URL(GITHUB_API_URL);
-                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn = (HttpURLConnection) url.openConnection();
                 conn.setRequestMethod("GET");
                 conn.setRequestProperty("Accept", "application/vnd.github.v3+json");
                 conn.setRequestProperty("User-Agent", "Yumigram-Android/" + CURRENT_VERSION);
@@ -119,9 +172,7 @@ public class YumiUpdateManager {
 
                 int code = conn.getResponseCode();
                 if (code != 200) {
-                    mainHandler.post(() -> {
-                        if (callback != null) callback.onError("HTTP " + code);
-                    });
+                    finishCheck(null, false, "HTTP " + code);
                     return;
                 }
 
@@ -141,6 +192,8 @@ public class YumiUpdateManager {
 
                 String apkUrl = null;
                 long apkSize = 0;
+                String fallbackApkUrl = null;
+                long fallbackApkSize = 0;
 
                 JSONArray assets = root.optJSONArray("assets");
                 if (assets != null) {
@@ -148,33 +201,60 @@ public class YumiUpdateManager {
                         JSONObject asset = assets.getJSONObject(i);
                         String assetName = asset.optString("name");
                         if (assetName.endsWith(".apk")) {
-                            apkUrl = asset.optString("browser_download_url");
-                            apkSize = asset.optLong("size", 0);
-                            break;
+                            final String candidateUrl = asset.optString("browser_download_url");
+                            final long candidateSize = asset.optLong("size", 0);
+                            if (assetName.equalsIgnoreCase("Yumigram-arm64-v8a.apk")) {
+                                apkUrl = candidateUrl;
+                                apkSize = candidateSize;
+                                break;
+                            }
+                            if (fallbackApkUrl == null) {
+                                fallbackApkUrl = candidateUrl;
+                                fallbackApkSize = candidateSize;
+                            }
                         }
                     }
                 }
+                if (apkUrl == null) {
+                    apkUrl = fallbackApkUrl;
+                    apkSize = fallbackApkSize;
+                }
 
                 if (TextUtils.isEmpty(apkUrl)) {
-                    mainHandler.post(() -> {
-                        if (callback != null) callback.onError("No APK asset found in release");
-                    });
+                    finishCheck(null, false, "No APK asset found in release");
                     return;
                 }
 
                 UpdateInfo info = new UpdateInfo(tagName, name, body, apkUrl, apkSize, publishedAt);
                 cachedUpdate = info;
                 boolean hasUpdate = info.isNewerThan(CURRENT_VERSION);
-
-                mainHandler.post(() -> {
-                    if (callback != null) callback.onSuccess(info, hasUpdate);
-                });
+                cachedHasUpdate = hasUpdate;
+                finishCheck(info, hasUpdate, null);
 
             } catch (Exception e) {
                 FileLog.e(TAG, e);
-                mainHandler.post(() -> {
-                    if (callback != null) callback.onError(e.getLocalizedMessage());
-                });
+                finishCheck(null, false, e.getLocalizedMessage());
+            } finally {
+                if (conn != null) conn.disconnect();
+            }
+        });
+    }
+
+    private static void finishCheck(UpdateInfo update, boolean hasUpdate, String error) {
+        final ArrayList<CheckCallback> callbacks;
+        synchronized (pendingCheckCallbacks) {
+            isChecking = false;
+            callbacks = new ArrayList<>(pendingCheckCallbacks);
+            pendingCheckCallbacks.clear();
+        }
+        if (error == null && update != null && ApplicationLoader.applicationContext != null) {
+            ApplicationLoader.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                    .edit().putLong(KEY_LAST_AUTO_CHECK_SUCCESS, System.currentTimeMillis()).apply();
+        }
+        mainHandler.post(() -> {
+            for (CheckCallback callback : callbacks) {
+                if (error == null && update != null) callback.onSuccess(update, hasUpdate);
+                else callback.onError(error == null ? "Update check failed" : error);
             }
         });
     }
@@ -189,20 +269,24 @@ public class YumiUpdateManager {
         isDownloading = true;
 
         Utilities.globalQueue.postRunnable(() -> {
+            HttpURLConnection conn = null;
             try {
                 File updatesDir = new File(ApplicationLoader.applicationContext.getCacheDir(), "yumi_updates");
                 if (!updatesDir.exists()) {
-                    updatesDir.mkdirs();
+                    if (!updatesDir.mkdirs() && !updatesDir.isDirectory()) {
+                        throw new Exception("Could not create update cache directory");
+                    }
                 }
 
-                File destination = new File(updatesDir, "Yumigram-" + update.tagName + ".apk");
-                File tempFile = new File(updatesDir, "Yumigram-" + update.tagName + ".apk.tmp");
+                final String safeTag = update.tagName.replaceAll("[^A-Za-z0-9._-]", "_");
+                File destination = new File(updatesDir, "Yumigram-" + safeTag + ".apk");
+                File tempFile = new File(updatesDir, "Yumigram-" + safeTag + ".apk.tmp");
 
                 URL currentUrl = new URL(update.apkUrl);
-                HttpURLConnection conn = null;
+                boolean connected = false;
                 for (int redirect = 0; redirect < 5; redirect++) {
                     conn = (HttpURLConnection) currentUrl.openConnection();
-                    conn.setInstanceFollowRedirects(true);
+                    conn.setInstanceFollowRedirects(false);
                     conn.setRequestProperty("User-Agent", "Yumigram-Android/" + CURRENT_VERSION);
                     conn.setConnectTimeout(25000);
                     conn.setReadTimeout(30000);
@@ -210,13 +294,24 @@ public class YumiUpdateManager {
                     int code = conn.getResponseCode();
                     if (code == HttpURLConnection.HTTP_MOVED_PERM || code == HttpURLConnection.HTTP_MOVED_TEMP || code == 307 || code == 308 || code == 303) {
                         String redirectUrl = conn.getHeaderField("Location");
+                        conn.disconnect();
+                        if (TextUtils.isEmpty(redirectUrl)) {
+                            throw new Exception("Update download redirect has no destination");
+                        }
+                        if (redirect == 4) {
+                            throw new Exception("APK download exceeded the redirect limit");
+                        }
                         currentUrl = new URL(redirectUrl);
                     } else {
+                        if (code != HttpURLConnection.HTTP_OK) {
+                            throw new Exception("APK download failed (HTTP " + code + ")");
+                        }
+                        connected = true;
                         break;
                     }
                 }
 
-                if (conn == null) {
+                if (conn == null || !connected) {
                     throw new Exception("Unable to establish connection");
                 }
 
@@ -249,16 +344,34 @@ public class YumiUpdateManager {
                             }
                         }
                     }
+                    out.getFD().sync();
+                    if (totalBytes > 0 && downloaded != totalBytes) {
+                        throw new Exception("APK download was incomplete");
+                    }
                 }
 
-                isDownloading = false;
+                final String packageName = ApplicationLoader.getApplicationId();
+                final PackageInfo downloadedPackage = ApplicationLoader.applicationContext.getPackageManager()
+                        .getPackageArchiveInfo(tempFile.getAbsolutePath(), 0);
+                if (downloadedPackage == null || !packageName.equals(downloadedPackage.packageName)) {
+                    throw new Exception("Downloaded APK is not a Yumigram package");
+                }
+                final PackageInfo installedPackage = ApplicationLoader.applicationContext.getPackageManager()
+                        .getPackageInfo(packageName, 0);
+                if (downloadedPackage.versionCode <= installedPackage.versionCode) {
+                    throw new Exception("Downloaded APK is not newer than the installed version");
+                }
 
+                if (destination.exists() && !destination.delete()) {
+                    throw new Exception("Could not replace cached APK");
+                }
                 if (tempFile.renameTo(destination)) {
                     destination.setReadable(true, false);
                     mainHandler.post(() -> {
                         if (callback != null) callback.onSuccess(destination);
                     });
                 } else {
+                    tempFile.delete();
                     mainHandler.post(() -> {
                         if (callback != null) callback.onError("Failed to rename downloaded APK");
                     });
@@ -267,9 +380,18 @@ public class YumiUpdateManager {
             } catch (Exception e) {
                 isDownloading = false;
                 FileLog.e(TAG, e);
+                try {
+                    File updatesDir = new File(ApplicationLoader.applicationContext.getCacheDir(), "yumi_updates");
+                    File tempFile = new File(updatesDir, "Yumigram-" + update.tagName.replaceAll("[^A-Za-z0-9._-]", "_") + ".apk.tmp");
+                    if (tempFile.exists()) tempFile.delete();
+                } catch (Exception ignored) {
+                }
                 mainHandler.post(() -> {
                     if (callback != null) callback.onError(e.getLocalizedMessage());
                 });
+            } finally {
+                if (conn != null) conn.disconnect();
+                isDownloading = false;
             }
         });
     }
@@ -283,6 +405,14 @@ public class YumiUpdateManager {
         }
 
         try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !activity.getPackageManager().canRequestPackageInstalls()) {
+                final Intent permissionIntent = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                        Uri.parse("package:" + ApplicationLoader.getApplicationId()));
+                permissionIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                activity.startActivity(permissionIntent);
+                return;
+            }
+
             Uri contentUri = FileProvider.getUriForFile(
                     activity,
                     ApplicationLoader.getApplicationId() + ".provider",

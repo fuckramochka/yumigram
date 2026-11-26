@@ -23,6 +23,7 @@ import android.text.Layout;
 import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityManager;
 import android.view.accessibility.AccessibilityNodeInfo;
@@ -59,6 +60,7 @@ public class ProfileActionsView extends View {
     private final Paint paint = new Paint();
     private final Paint shaderPaint = new Paint();
     private final Paint profileV2GlassOutlinePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final android.graphics.Path profileV2ButtonClipPath = new android.graphics.Path();
     private float parentExpanded;
 
     public boolean isAnimatingCallAction = false;
@@ -73,6 +75,7 @@ public class ProfileActionsView extends View {
 
     private int activeCount = 0;
     private final int targetHeight;
+    private final int touchSlop;
     private float currentHeight = 0;
 
     private OnActionClickListener onActionClickListener = null;
@@ -136,6 +139,7 @@ public class ProfileActionsView extends View {
         textPadding = dpf2(4);
 
         this.targetHeight = (int) (targetHeight - ypadding - top);
+        touchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
 
         setBackgroundColor(0);
 
@@ -311,13 +315,28 @@ public class ProfileActionsView extends View {
                 AndroidUtilities.rectTmp.width() / 2.0f * (1.0f - action.getScale()),
                 AndroidUtilities.rectTmp.height() / 2.0f * (1.0f - action.getScale())
             );
+            int profileV2CanvasSave = -1;
+            if (profileV2) {
+                profileV2ButtonClipPath.reset();
+                profileV2ButtonClipPath.addCircle(
+                        AndroidUtilities.rectTmp.centerX(),
+                        AndroidUtilities.rectTmp.centerY(),
+                        Math.min(AndroidUtilities.rectTmp.width(), AndroidUtilities.rectTmp.height()) * .5f,
+                        android.graphics.Path.Direction.CW
+                );
+                profileV2CanvasSave = canvas.save();
+                canvas.clipPath(profileV2ButtonClipPath);
+            }
             if (glassFactory != null) {
                 drawGlass(canvas, AndroidUtilities.rectTmp, backgroundRadius, action.getAlpha() * alphaFraction1);
+                if (profileV2) {
+                    canvas.restoreToCount(profileV2CanvasSave);
+                }
                 if (profileV2) {
                     profileV2GlassOutlinePaint.setStyle(Paint.Style.STROKE);
                     profileV2GlassOutlinePaint.setStrokeWidth(dp(1));
                     profileV2GlassOutlinePaint.setColor(Theme.multAlpha(isButtonColorLight() ? 0x44000000 : 0x66FFFFFF, action.getAlpha() * alphaFraction1));
-                    canvas.drawRoundRect(AndroidUtilities.rectTmp, backgroundRadius, backgroundRadius, profileV2GlassOutlinePaint);
+                    canvas.drawCircle(AndroidUtilities.rectTmp.centerX(), AndroidUtilities.rectTmp.centerY(), Math.min(AndroidUtilities.rectTmp.width(), AndroidUtilities.rectTmp.height()) * .5f - dp(.5f), profileV2GlassOutlinePaint);
                 }
                 continue;
             }
@@ -336,6 +355,13 @@ public class ProfileActionsView extends View {
                 shaderPaint.setAlpha(wasAlpha2);
             }
             paint.setAlpha(wasAlpha);
+            if (profileV2) {
+                canvas.restoreToCount(profileV2CanvasSave);
+                profileV2GlassOutlinePaint.setStyle(Paint.Style.STROKE);
+                profileV2GlassOutlinePaint.setStrokeWidth(dp(1));
+                profileV2GlassOutlinePaint.setColor(Theme.multAlpha(isButtonColorLight() ? 0x44000000 : 0x66FFFFFF, action.getAlpha() * alphaFraction1));
+                canvas.drawCircle(AndroidUtilities.rectTmp.centerX(), AndroidUtilities.rectTmp.centerY(), Math.min(AndroidUtilities.rectTmp.width(), AndroidUtilities.rectTmp.height()) * .5f - dp(.5f), profileV2GlassOutlinePaint);
+            }
         }
         hideUnusedGlass();
 
@@ -519,7 +545,7 @@ public class ProfileActionsView extends View {
             }
         } else if (eventAction == MotionEvent.ACTION_MOVE) {
             if (hit != null) {
-                if (Math.abs(x - downX) > 20 || Math.abs(y - downY) > 20) {
+                if (Math.hypot(x - downX, y - downY) > touchSlop) {
                     hit.bounce.setPressed(false);
                     hit = null;
                 }

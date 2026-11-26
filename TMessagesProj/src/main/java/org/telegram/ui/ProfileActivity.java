@@ -463,6 +463,12 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         return isProfileV2User() && !isPulledDown && !mediaHeaderVisible && mediaHeaderAnimationProgress <= 0f && !searchMode;
     }
 
+    private Integer getProfileV2SectionCardColor() {
+        if (!isProfileV2User()) return null;
+        final int surface = getThemedColor(Theme.key_windowBackgroundWhite);
+        return ColorUtils.setAlphaComponent(surface, 244);
+    }
+
     private void drawProfileV2ListBackground(Canvas canvas) {
         final int width = listView.getWidth();
         final int height = listView.getHeight();
@@ -4185,8 +4191,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             @Override
             public void onDraw(Canvas canvas) {
                 if (isProfileV2HeaderActive()) {
-                    final boolean darkSurface = Theme.isCurrentThemeDark() || topView != null && topView.hasColorById;
-                    setSectionBackgroundColorOverride(ColorUtils.setAlphaComponent(darkSurface ? Color.BLACK : Color.WHITE, darkSurface ? 70 : 216));
+                    setSectionBackgroundColorOverride(getProfileV2SectionCardColor());
                     drawProfileV2ListBackground(canvas);
                 } else {
                     setSectionBackgroundColorOverride(null);
@@ -4308,9 +4313,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         // the rows above the list's top go under the header's blur, with their cards
         listView.setSectionsOverscanTop(AndroidUtilities.statusBarHeight + ActionBar.getCurrentActionBarHeight());
         ThemeBind.backgroundColor(listView, Theme.key_windowBackgroundGray, resourcesProvider);
-        listView.setSectionBackgroundColorOverride(isProfileV2User()
-                ? ColorUtils.setAlphaComponent(Color.BLACK, Theme.isCurrentThemeDark() ? 72 : 42)
-                : null);
+        listView.setSectionBackgroundColorOverride(getProfileV2SectionCardColor());
         listView.setVerticalScrollBarEnabled(false);
         final IBlur3Capture listViewCapture = new ViewGroupPartRenderer(listView, (ViewGroup) fragmentView, (canvas, child, drawingTime) -> {
             if (child == sharedMediaLayout) {
@@ -8246,6 +8249,9 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
     private void setupHeaderGlass() {
         final BaseFragmentSimpleGlass glass = getBaseSimpleGlass();
         buttonsGlass = new ProfileButtonsGlass(glassEngine, glass);
+        if (giftsView != null) {
+            giftsView.setGlassFactory(glass.factory);
+        }
         if (topView != null) {
             buttonsGlass.setButtonColor(topView.btnColor, topView.hasColorById);
         }

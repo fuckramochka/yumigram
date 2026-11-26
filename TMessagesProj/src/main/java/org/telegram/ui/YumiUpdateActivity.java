@@ -34,6 +34,8 @@ public class YumiUpdateActivity extends UniversalFragment {
     private Boolean hasUpdateAvailable = null;
     private String downloadProgress = null;
     private File readyApkFile = null;
+    private int lastRenderedProgress = -1;
+    private long lastProgressRenderTime;
 
     @Override
     protected CharSequence getTitle() {
@@ -174,11 +176,19 @@ public class YumiUpdateActivity extends UniversalFragment {
                 }
 
                 downloadProgress = "⏳ 0%...";
+                lastRenderedProgress = -1;
+                lastProgressRenderTime = 0;
                 updateList();
 
                 YumiUpdateManager.downloadApk(updateInfo, new YumiUpdateManager.DownloadCallback() {
                     @Override
                     public void onProgress(int percent, long downloadedBytes, long totalBytes) {
+                        long now = android.os.SystemClock.uptimeMillis();
+                        if (percent != 100 && percent - lastRenderedProgress < 5 && now - lastProgressRenderTime < 1000) {
+                            return;
+                        }
+                        lastRenderedProgress = percent;
+                        lastProgressRenderTime = now;
                         String dlStr = AndroidUtilities.formatFileSize(downloadedBytes);
                         String totStr = AndroidUtilities.formatFileSize(totalBytes);
                         downloadProgress = YumiLocale.formatString("YumiUpdateDownloading", R.string.YumiUpdateDownloading, percent, dlStr, totStr);

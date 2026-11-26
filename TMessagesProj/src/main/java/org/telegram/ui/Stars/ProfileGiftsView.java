@@ -32,10 +32,12 @@ import org.telegram.tgnet.TLRPC;
 import org.telegram.tgnet.tl.TL_stars;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.Theme;
-import org.telegram.ui.Components.AnimatedEmojiDrawable;
 import org.telegram.ui.Components.AnimatedFloat;
 import org.telegram.ui.Components.ButtonBounce;
 import org.telegram.ui.Components.CubicBezierInterpolator;
+import org.telegram.ui.Components.ProfileButtonsGlass;
+import org.telegram.ui.Components.blur3.BlurredBackgroundDrawableViewFactory;
+import org.telegram.ui.Components.blur3.drawable.BlurredBackgroundDrawable;
 import org.telegram.ui.ProfileActivity;
 
 import java.util.ArrayList;
@@ -51,11 +53,26 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
     private final Theme.ResourcesProvider resourcesProvider;
 
     private boolean active = true;
+    private BlurredBackgroundDrawableViewFactory glassFactory;
+
+    public void setGlassFactory(BlurredBackgroundDrawableViewFactory factory) {
+        glassFactory = factory;
+        for (Gift gift : gifts) {
+            gift.glassDrawable = null;
+        }
+        invalidate();
+    }
     public void setActive(boolean f) {
         this.active = f;
         if (!f && pressedGift != null) {
             pressedGift.bounce.setPressed(false);
+            pressedGift.dragging = false;
+            pressedGift.returning = false;
+            pressedGift.dragScale = pressedGift.stretchX = pressedGift.stretchY = 1f;
             pressedGift = null;
+            gestureOwned = gestureDragged = false;
+            activePointerId = MotionEvent.INVALID_POINTER_ID;
+            disallowParentIntercept(false);
         }
         invalidate();
     }
@@ -148,7 +165,10 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
         NotificationCenter.getInstance(currentAccount).addWeakObserver(this, NotificationCenter.starUserGiftsLoaded);
 
         for (Gift gift : gifts) {
-            gift.emojiDrawable.addView(this);
+            if (gift.starGiftDrawable != null && !gift.starGiftDrawableAttached) {
+                gift.starGiftDrawable.onAttachedToWindow();
+                gift.starGiftDrawableAttached = true;
+            }
         }
 
         update();
@@ -161,7 +181,10 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
         NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.starUserGiftsLoaded);
 
         for (Gift gift : gifts) {
-            gift.emojiDrawable.removeView(this);
+            if (gift.starGiftDrawable != null && gift.starGiftDrawableAttached) {
+                gift.starGiftDrawable.onDetachedToWindow();
+                gift.starGiftDrawableAttached = false;
+            }
         }
     }
 
@@ -220,21 +243,28 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
         public RadialGradient gradient;
         public final Matrix gradientMatrix = new Matrix();
         public Paint gradientPaint;
-        public AnimatedEmojiDrawable emojiDrawable;
+        public StarGiftSheet.StarGiftDrawableIcon starGiftDrawable;
+        private boolean starGiftDrawableAttached;
         public AnimatedFloat animatedFloat;
 
         public final RectF bounds = new RectF();
         public final ButtonBounce bounce = new ButtonBounce(ProfileGiftsView.this);
         private final Paint bubblePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Shader bubbleShader = new android.graphics.SweepGradient(0, 0,
+                new int[]{0xFFFF8DE1, 0xFF8DEEFF, 0xFFFFF1A8, 0xFFB99CFF, 0xFFFF8DE1}, null);
+        private BlurredBackgroundDrawable glassDrawable;
         private float dragX, dragY, velocityX, velocityY, dragOffsetX, dragOffsetY;
         private float tilt;
+        private float dragScale = 1f, releaseScale = 1f, stretchX = 1f, stretchY = 1f;
         private boolean dragging, returning;
-        private long physicsTime;
+        private long physicsTime, releaseTime;
 
         public void copy(Gift b) {
             gradient = b.gradient;
-            emojiDrawable = b.emojiDrawable;
+            starGiftDrawable = b.starGiftDrawable;
+            starGiftDrawableAttached = b.starGiftDrawableAttached;
             gradientPaint = b.gradientPaint;
+            glassDrawable = b.glassDrawable;
             animatedFloat = b.animatedFloat;
             particles = b.particles;
             position = b.position;
@@ -243,20 +273,31 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
         public void draw(
                 Canvas canvas,
                 float cx, float cy,
-                float ascale, float rotate,
+                float ascale, float stretchX, float stretchY, float rotate,
                 float alpha,
                 float gradientAlpha
         ) {
-            if (alpha <= 0.0f) return;
+            if (alpha <= 0.0f) {
+                bounds.setEmpty();
+                return;
+            }
             final float gsz = dp(54);
             bounds.set(cx - gsz / 2, cy - gsz / 2, cx + gsz / 2, cy + gsz / 2);
             canvas.save();
             canvas.translate(cx, cy);
             canvas.rotate(rotate);
             final float scale = ascale * bounce.getScale(0.1f);
-            canvas.scale(scale, scale);
+            canvas.scale(scale * stretchX, scale * stretchY);
             particles.process();
             particles.draw(canvas, color, alpha);
+            if (glassFactory != null) {
+                if (glassDrawable == null) {
+                    glassDrawable = glassFactory.create(ProfileGiftsView.this, ProfileButtonsGlass.NO_COLORS).setRadius(gsz / 2f);
+                }
+                glassDrawable.setBounds((int) -gsz / 2, (int) -gsz / 2, (int) gsz / 2, (int) gsz / 2);
+                glassDrawable.setAlpha((int) (255 * alpha));
+                glassDrawable.draw(canvas);
+            }
             if (gradientPaint != null) {
                 gradientPaint.setAlpha((int) (0xFF * alpha * gradientAlpha));
                 canvas.drawCircle(0, 0, gsz / 2f, gradientPaint);
@@ -266,12 +307,11 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
             canvas.drawCircle(0, 0, gsz / 2f, bubblePaint);
             bubblePaint.setStyle(Paint.Style.STROKE);
             bubblePaint.setStrokeWidth(dp(2.1f));
-            bubblePaint.setShader(new android.graphics.SweepGradient(0, 0,
-                    new int[]{Theme.multAlpha(0xFFFF8DE1, .72f * alpha), Theme.multAlpha(0xFF8DEEFF, .72f * alpha),
-                            Theme.multAlpha(0xFFFFF1A8, .58f * alpha), Theme.multAlpha(0xFFB99CFF, .68f * alpha),
-                            Theme.multAlpha(0xFFFF8DE1, .72f * alpha)}, null));
+            bubblePaint.setShader(bubbleShader);
+            bubblePaint.setAlpha((int) (255 * alpha));
             canvas.drawCircle(0, 0, gsz / 2f - dp(1.2f), bubblePaint);
             bubblePaint.setShader(null);
+            bubblePaint.setAlpha(255);
             bubblePaint.setStrokeWidth(dp(.8f));
             bubblePaint.setColor(Theme.multAlpha(Color.WHITE, .48f * alpha));
             canvas.drawArc(-gsz * .42f, -gsz * .42f, gsz * .42f, gsz * .42f, 205, 94, false, bubblePaint);
@@ -280,15 +320,16 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
             canvas.drawOval(-gsz * .31f, -gsz * .37f, -gsz * .01f, -gsz * .26f, bubblePaint);
             bubblePaint.setColor(Theme.multAlpha(0xFFB4F6FF, .12f * alpha));
             canvas.drawOval(gsz * .13f, gsz * .12f, gsz * .4f, gsz * .35f, bubblePaint);
-            if (emojiDrawable != null) {
-                final int sz = dp(29);
-                emojiDrawable.setBounds(-sz / 2, -sz / 2, sz / 2, sz / 2);
-                emojiDrawable.setAlpha((int) (0xFF * alpha));
-                emojiDrawable.draw(canvas);
+            if (starGiftDrawable != null) {
+                starGiftDrawable.setBounds(-gsz / 2, -gsz / 2, gsz / 2, gsz / 2);
+                canvas.saveLayerAlpha(-gsz / 2f, -gsz / 2f, gsz / 2f, gsz / 2f, (int) (255 * alpha));
+                starGiftDrawable.draw(canvas);
+                canvas.restore();
             }
             canvas.restore();
-            final float hitRadius = gsz * .5f * Math.abs(scale);
-            bounds.set(cx - hitRadius, cy - hitRadius, cx + hitRadius, cy + hitRadius);
+            final float hitRadiusX = gsz * .5f * Math.abs(scale * stretchX);
+            final float hitRadiusY = gsz * .5f * Math.abs(scale * stretchY);
+            bounds.set(cx - hitRadiusX, cy - hitRadiusY, cx + hitRadiusX, cy + hitRadiusY);
         }
     }
 
@@ -305,6 +346,7 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
             return;
         }
         if (!MessagesController.getInstance(currentAccount).enableGiftsInProfile) {
+            clearGifts();
             return;
         }
 
@@ -364,28 +406,27 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
             } else {
                 if (oldGift != null) {
                     g.position = oldGift.position;
-                    if (oldGift.emojiDrawable != null) {
-                        oldGift.emojiDrawable.removeView(this);
+                    if (oldGift.starGiftDrawable != null && oldGift.starGiftDrawableAttached) {
+                        oldGift.starGiftDrawable.onDetachedToWindow();
+                        oldGift.starGiftDrawableAttached = false;
                     }
                 }
                 g.gradient = new RadialGradient(0, 0, dp(22.5f), new int[]{g.color, Theme.multAlpha(g.color, 0.0f)}, new float[]{0, 1}, Shader.TileMode.CLAMP);
                 g.gradientPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
                 g.gradientPaint.setShader(g.gradient);
-                if (g.document != null) {
-                    g.emojiDrawable = AnimatedEmojiDrawable.make(currentAccount, AnimatedEmojiDrawable.CACHE_TYPE_MESSAGES, g.document);
-                } else {
-                    g.emojiDrawable = AnimatedEmojiDrawable.make(currentAccount, AnimatedEmojiDrawable.CACHE_TYPE_MESSAGES, g.documentId);
-                }
+                g.starGiftDrawable = new StarGiftSheet.StarGiftDrawableIcon(ProfileGiftsView.this, g.uniqueGift, 54, .25f).setRounding(dp(27));
+                g.starGiftDrawableAttached = isAttachedToWindow();
                 g.animatedFloat = new AnimatedFloat(this, 0, 320, null);
                 g.animatedFloat.force(0.0f);
-                if (isAttachedToWindow()) {
-                    g.emojiDrawable.addView(this);
-                }
             }
         }
 
         List<Integer> positions = new ArrayList<>();
-        for (int i = 0; i < maxCount; i++) {
+        final int[] preferredGiftPositions = {1, 5, 0, 4, 2, 3};
+        for (int position : preferredGiftPositions) {
+            if (position < maxCount) positions.add(position);
+        }
+        for (int i = preferredGiftPositions.length; i < maxCount; i++) {
             positions.add(i);
         }
 
@@ -399,8 +440,11 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
                 }
             }
             if (newGift == null) {
-                g.emojiDrawable.removeView(this);
-                g.emojiDrawable = null;
+                if (g.starGiftDrawable != null && g.starGiftDrawableAttached) {
+                    g.starGiftDrawable.onDetachedToWindow();
+                    g.starGiftDrawableAttached = false;
+                }
+                g.starGiftDrawable = null;
                 g.gradient = null;
             } else {
                 positions.remove((Object) g.position);
@@ -408,11 +452,10 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
         }
 
         if (!positions.isEmpty()) {
-            BagRandomizer<Integer> bagRandomizer = new BagRandomizer<>(positions);
             for (int i = 0; i < gifts.size(); ++i) {
                 final Gift g = gifts.get(i);
                 if (g.position == -1) {
-                    g.position = bagRandomizer.next();
+                    g.position = positions.remove(0);
                 }
             }
         }
@@ -423,8 +466,9 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
 
     private void clearGifts() {
         for (Gift gift : gifts) {
-            if (gift.emojiDrawable != null) {
-                gift.emojiDrawable.removeView(this);
+            if (gift.starGiftDrawable != null && gift.starGiftDrawableAttached) {
+                gift.starGiftDrawable.onDetachedToWindow();
+                gift.starGiftDrawableAttached = false;
             }
         }
         gifts.clear();
@@ -543,8 +587,14 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
                 gift.dragY += gift.velocityY * dt;
                 gx = gift.dragX;
                 gy = gift.dragY;
-                if (Math.abs(dx) < dp(.8f) && Math.abs(dy) < dp(.8f) && Math.abs(gift.velocityX) + Math.abs(gift.velocityY) < dp(8)) {
+                final float shrink = Utilities.clamp01((now - gift.releaseTime) / 520f);
+                final float easedShrink = 1f - (1f - shrink) * (1f - shrink) * (1f - shrink);
+                gift.dragScale = AndroidUtilities.lerp(gift.releaseScale, 1f, easedShrink);
+                gift.stretchX = AndroidUtilities.lerp(gift.stretchX, 1f, Math.min(1f, dt * 8f));
+                gift.stretchY = AndroidUtilities.lerp(gift.stretchY, 1f, Math.min(1f, dt * 8f));
+                if (Math.abs(dx) < dp(.8f) && Math.abs(dy) < dp(.8f) && Math.abs(gift.velocityX) + Math.abs(gift.velocityY) < dp(8) && shrink >= 1f) {
                     gift.returning = false;
+                    gift.dragScale = gift.stretchX = gift.stretchY = 1f;
                     gift.velocityX = gift.velocityY = 0;
                 } else {
                     animateVisibleGifts = true;
@@ -569,7 +619,7 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
             } else {
                 gift.tilt *= .86f;
             }
-            gift.draw(canvas, gx, gy, scale * depthScale, gift.tilt, alpha, 1f);
+            gift.draw(canvas, gx, gy, scale * depthScale * gift.dragScale, gift.stretchX, gift.stretchY, gift.tilt, alpha, 1f);
         }
 
         canvas.restore();
@@ -583,7 +633,9 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
             Gift gift = gifts.get(i);
             final float dx = x - gift.bounds.centerX();
             final float dy = y - gift.bounds.centerY();
-            if (gift.bounds.contains(x, y) && dx * dx + dy * dy <= gift.bounds.width() * gift.bounds.width() * .25f)
+            final float radiusX = Math.max(1f, gift.bounds.width() * .5f);
+            final float radiusY = Math.max(1f, gift.bounds.height() * .5f);
+            if (gift.bounds.contains(x, y) && dx * dx / (radiusX * radiusX) + dy * dy / (radiusY * radiusY) <= 1f)
                 return gift;
         }
         return null;
@@ -593,7 +645,7 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-        if (!active || !YumiConfig.isProfileV2Enabled() || dialogId <= 0) return false;
+        if (!active || !YumiConfig.isProfileV2Enabled() || dialogId <= 0 || expandProgress >= 1f || collapseProgress <= 0f || actionBarProgress >= 1f) return false;
         final int action = event.getActionMasked();
         if (action == MotionEvent.ACTION_DOWN) {
             pressedGift = getGiftUnder(event.getX(), event.getY());
@@ -609,6 +661,7 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
                 pressedGift.dragOffsetY = pressedGift.bounds.centerY() - downY;
                 pressedGift.velocityX = pressedGift.velocityY = 0;
                 pressedGift.returning = false;
+                disallowParentIntercept(true);
                 return true;
             }
             return false;
@@ -621,13 +674,20 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
                 gestureDragged = true;
                 pressedGift.dragging = true;
                 pressedGift.bounce.setPressed(false);
-                requestDisallowInterceptTouchEvent(true);
+                disallowParentIntercept(true);
             }
             if (gestureDragged) {
                 final float dt = Math.max(.001f, (event.getEventTime() - lastTouchTime) / 1000f);
-                final float radius = dp(27f);
-                pressedGift.dragX = Math.max(radius, Math.min(getWidth() - radius, x + pressedGift.dragOffsetX));
-                pressedGift.dragY = Math.max(radius, Math.min(getHeight() - radius, y + pressedGift.dragOffsetY));
+                final float dx = x - downX;
+                final float dy = y - downY;
+                final float pull = Math.min(1f, (float) Math.hypot(dx, dy) / dp(190f));
+                pressedGift.dragScale = 1f + 3.5f * pull;
+                pressedGift.stretchX = Math.min(1.52f, 1f + Math.abs(dx) / dp(270f));
+                pressedGift.stretchY = Math.min(1.52f, 1f + Math.abs(dy) / dp(270f));
+                final float radiusX = dp(27f) * pressedGift.dragScale * pressedGift.stretchX;
+                final float radiusY = dp(27f) * pressedGift.dragScale * pressedGift.stretchY;
+                pressedGift.dragX = Math.max(Math.min(radiusX, getWidth() / 2f), Math.min(getWidth() - Math.min(radiusX, getWidth() / 2f), x + pressedGift.dragOffsetX));
+                pressedGift.dragY = Math.max(Math.min(radiusY, getHeight() / 2f), Math.min(getHeight() - Math.min(radiusY, getHeight() / 2f), y + pressedGift.dragOffsetY));
                 pressedGift.velocityX = (pressedGift.dragX - (lastX + pressedGift.dragOffsetX)) / dt;
                 pressedGift.velocityY = (pressedGift.dragY - (lastY + pressedGift.dragOffsetY)) / dt;
                 lastX = x;
@@ -644,13 +704,15 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
                 pressedGift.dragging = false;
                 pressedGift.returning = true;
                 pressedGift.physicsTime = SystemClock.uptimeMillis();
+                pressedGift.releaseTime = pressedGift.physicsTime;
+                pressedGift.releaseScale = pressedGift.dragScale;
                 pressedGift.velocityX *= .48f;
                 pressedGift.velocityY *= .48f;
             }
             pressedGift = null;
             gestureOwned = gestureDragged = false;
             activePointerId = MotionEvent.INVALID_POINTER_ID;
-            requestDisallowInterceptTouchEvent(false);
+            disallowParentIntercept(false);
             invalidate();
             return true;
         } else if (action == MotionEvent.ACTION_CANCEL) {
@@ -660,16 +722,24 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
                     pressedGift.dragging = false;
                     pressedGift.returning = true;
                     pressedGift.physicsTime = SystemClock.uptimeMillis();
+                    pressedGift.releaseTime = pressedGift.physicsTime;
+                    pressedGift.releaseScale = pressedGift.dragScale;
                 }
                 pressedGift = null;
             }
             gestureOwned = gestureDragged = false;
             activePointerId = MotionEvent.INVALID_POINTER_ID;
-            requestDisallowInterceptTouchEvent(false);
+            disallowParentIntercept(false);
             invalidate();
             return true;
         }
         return gestureOwned;
+    }
+
+    private void disallowParentIntercept(boolean disallow) {
+        if (getParent() != null) {
+            getParent().requestDisallowInterceptTouchEvent(disallow);
+        }
     }
 
     public void onGiftClick(Gift gift) {

@@ -28,6 +28,16 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Verify release tag version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version="$(sed -n 's/^YUMI_VERSION=//p' gradle.properties | head -n 1)"
+          expected_tag="v${version}"
+          if [ "${GITHUB_REF_NAME}" != "${expected_tag}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match YUMI_VERSION=${version}"
+            exit 1
+          fi
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -50,17 +60,11 @@ jobs:
 
       - name: Release APK
         uses: softprops/action-gh-release@v2
-        if: github.ref == 'refs/heads/yumigram' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v')
         with:
-          tag_name: v1.0.25
-          name: "Yumigram v1.0.25 (arm64-v8a)"
-          body: |
-            ### Yumigram Android v1.0.25 (arm64-v8a)
-            - 🎵 Spotify Player improvements: perfectly centered & spaced buttons in bottom player
-            - 🎨 Fixed playlist track placeholder: sleek dark button with Spotify green play icon instead of solid white circle
-            - 🌐 Fixed Ukrainian & Russian localization for playlist title ("Плейлист %s") and "Додати до профілю"
-            - 🖼️ Rounded album cover corners (8dp) in Spotify player
-            - 🤖 Autonomous AI Agent, persistent chat, 3D wheel picker, ghost mode & auto-updates
+          tag_name: ${{ github.ref_name }}
+          name: "Yumigram ${{ github.ref_name }} (arm64-v8a)"
+          body: "Yumigram Android ${{ github.ref_name }}. Built from ${{ github.sha }}."
           files: |
             TMessagesProj/build/outputs/apk/**/*.apk
           draft: false

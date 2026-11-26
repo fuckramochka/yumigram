@@ -7283,7 +7283,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
             org.telegram.messenger.yumigram.update.YumiUpdateManager.checkUpdate(false, (update, hasUpdate) -> {
                 if (hasUpdate && !isFinishing()) {
                     BaseFragment fragment = getLastFragment();
-                    if (fragment != null) {
+                    if (fragment != null && org.telegram.messenger.yumigram.update.YumiUpdateManager.shouldNotifyUpdate(update.tagName)) {
                         BulletinFactory.of(fragment).createSimpleBulletin(
                                 R.raw.chats_infotip,
                                 org.telegram.messenger.yumigram.util.YumiLocale.formatString("YumiUpdateAvailableDetails", R.string.YumiUpdateAvailableDetails, update.tagName),
