@@ -321,7 +321,8 @@ public class ProfileGiftsView extends View implements NotificationCenter.Notific
             bubblePaint.setColor(Theme.multAlpha(0xFFB4F6FF, .12f * alpha));
             canvas.drawOval(gsz * .13f, gsz * .12f, gsz * .4f, gsz * .35f, bubblePaint);
             if (starGiftDrawable != null) {
-                starGiftDrawable.setBounds(-gsz / 2, -gsz / 2, gsz / 2, gsz / 2);
+                int halfGiftSize = Math.round(gsz / 2f);
+                starGiftDrawable.setBounds(-halfGiftSize, -halfGiftSize, halfGiftSize, halfGiftSize);
                 canvas.saveLayerAlpha(-gsz / 2f, -gsz / 2f, gsz / 2f, gsz / 2f, (int) (255 * alpha));
                 starGiftDrawable.draw(canvas);
                 canvas.restore();
