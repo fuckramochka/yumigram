@@ -684,7 +684,8 @@ public class TranscribeButton {
                     NotificationCenter.getInstance(account).postNotificationName(NotificationCenter.voiceTranscriptionUpdate, messageObject, null, null, (Boolean) true, (Boolean) true);
                 });
             } else {
-                if (org.telegram.messenger.yumigram.YumiConfig.isAiEnabled()) {
+                if (org.telegram.messenger.yumigram.YumiConfig.isAiEnabled()
+                        && org.telegram.messenger.yumigram.YumiConfig.isAiVoiceTranscriptionEnabled()) {
                     org.telegram.messenger.yumigram.ai.YumiAiManager.transcribeVoice(messageObject, new org.telegram.messenger.yumigram.ai.YumiAiManager.AiCallback() {
                         @Override
                         public void onSuccess(String text) {

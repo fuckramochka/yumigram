@@ -60,18 +60,17 @@ public class YumiConfig {
     public static final String KEY_AI_LOCAL_MODEL_ID = "yumi_ai_local_model_id";
     public static final String KEY_AI_SUMMARIZE_LIMIT = "yumi_ai_summarize_limit";
 
-    public static final String DEFAULT_PRIMARY_MODEL = "gemini-3.5-flash-lite";
-    public static final String DEFAULT_FALLBACK_MODEL = "gemini-3.1-flash-lite";
+    public static final String DEFAULT_PRIMARY_MODEL = "gemini-3.8-flash";
+    public static final String DEFAULT_FALLBACK_MODEL = "gemini-3.5-flash-lite";
 
     public static final String[] CLOUD_MODELS = new String[] {
+            "gemini-3.8-flash",
+            "gemini-3.6-flash",
+            "gemini-3.5-flash",
             "gemini-3.5-flash-lite",
             "gemini-3.1-flash-lite",
-            "gemini-3.0-flash",
-            "gemini-2.5-flash-lite",
-            "gemini-2.5-flash",
-            "gemini-2.0-flash",
-            "gemini-1.5-flash",
-            "gemini-1.5-pro"
+            "gemini-3.1-pro-preview",
+            "gemini-3-flash-preview"
     };
 
     // --- 7. Enhanced Media Player & Spotify Style ---
@@ -307,26 +306,35 @@ public class YumiConfig {
 
     public static String getAiPrimaryModel() {
         SharedPreferences p = getPrefs();
-        return p != null ? p.getString(KEY_AI_PRIMARY_MODEL, DEFAULT_PRIMARY_MODEL) : DEFAULT_PRIMARY_MODEL;
+        return getSupportedCloudModel(p == null ? null : p.getString(KEY_AI_PRIMARY_MODEL, DEFAULT_PRIMARY_MODEL), DEFAULT_PRIMARY_MODEL);
     }
 
     public static void setAiPrimaryModel(String model) {
         SharedPreferences p = getPrefs();
         if (p != null) {
-            p.edit().putString(KEY_AI_PRIMARY_MODEL, model).apply();
+            p.edit().putString(KEY_AI_PRIMARY_MODEL, getSupportedCloudModel(model, DEFAULT_PRIMARY_MODEL)).apply();
         }
     }
 
     public static String getAiFallbackModel() {
         SharedPreferences p = getPrefs();
-        return p != null ? p.getString(KEY_AI_FALLBACK_MODEL, DEFAULT_FALLBACK_MODEL) : DEFAULT_FALLBACK_MODEL;
+        return getSupportedCloudModel(p == null ? null : p.getString(KEY_AI_FALLBACK_MODEL, DEFAULT_FALLBACK_MODEL), DEFAULT_FALLBACK_MODEL);
     }
 
     public static void setAiFallbackModel(String model) {
         SharedPreferences p = getPrefs();
         if (p != null) {
-            p.edit().putString(KEY_AI_FALLBACK_MODEL, model).apply();
+            p.edit().putString(KEY_AI_FALLBACK_MODEL, getSupportedCloudModel(model, DEFAULT_FALLBACK_MODEL)).apply();
         }
+    }
+
+    private static String getSupportedCloudModel(String model, String fallback) {
+        if (model != null) {
+            for (String supported : CLOUD_MODELS) {
+                if (supported.equals(model)) return model;
+            }
+        }
+        return fallback;
     }
 
     public static String getAiLocalModelId() {
@@ -488,6 +496,70 @@ public class YumiConfig {
         SharedPreferences p = getPrefs();
         if (p != null) {
             p.edit().putBoolean(KEY_AUTO_CHECK_UPDATES, enabled).apply();
+        }
+    }
+
+    /** Reads an explicitly supported Yumigram toggle; null means the name is unknown. */
+    public static Boolean getAiManagedToggle(String name) {
+        if (name == null) return null;
+        switch (name.trim().toLowerCase(java.util.Locale.ROOT)) {
+            case "ghost_mode": return isGhostModeEnabled();
+            case "hide_read": return isHideReadEnabled();
+            case "hide_typing": return isHideTypingEnabled();
+            case "hide_story_views": return isHideStoriesSeenEnabled();
+            case "hide_voice_listen": return isHideVoiceListenEnabled();
+            case "stay_offline": return isStayOfflineEnabled();
+            case "anti_delete": return isAntiDeleteEnabled();
+            case "save_deleted_media": return isSaveDeletedMediaEnabled();
+            case "save_secret_media": return isSaveSecretMediaEnabled();
+            case "allow_secret_screenshots": return isAllowScreenshotsInSecretMedia();
+            case "hide_sponsored": return isHideSponsoredEnabled();
+            case "ai_enabled": return isAiEnabled();
+            case "ai_read_chat": return isAiAgentReadChatEnabled();
+            case "ai_send_messages": return isAiAgentSendMessagesEnabled();
+            case "ai_smart_replies": return isAiAgentSmartRepliesEnabled();
+            case "ai_voice_transcription": return isAiVoiceTranscriptionEnabled();
+            case "enhanced_player": return isEnhancedPlayerEnabled();
+            case "equalizer": return isEqualizerEnabled();
+            case "spotify_player": return isSpotifyPlayerEnabled();
+            case "spotify_dynamic_color": return isSpotifyDynamicColorEnabled();
+            case "profile_v2": return isProfileV2Enabled();
+            case "hide_stories": return isHideStoriesEnabled();
+            case "confirm_voice_call": return isConfirmVoiceCallEnabled();
+            case "auto_check_updates": return isAutoCheckUpdatesEnabled();
+            default: return null;
+        }
+    }
+
+    /** Applies only an explicitly supported Yumigram toggle; unknown names are rejected. */
+    public static boolean setAiManagedToggle(String name, boolean enabled) {
+        if (name == null) return false;
+        switch (name.trim().toLowerCase(java.util.Locale.ROOT)) {
+            case "ghost_mode": setGhostModeEnabled(enabled); return true;
+            case "hide_read": setHideReadEnabled(enabled); return true;
+            case "hide_typing": setHideTypingEnabled(enabled); return true;
+            case "hide_story_views": setHideStoriesSeenEnabled(enabled); return true;
+            case "hide_voice_listen": setHideVoiceListenEnabled(enabled); return true;
+            case "stay_offline": setStayOfflineEnabled(enabled); return true;
+            case "anti_delete": setAntiDeleteEnabled(enabled); return true;
+            case "save_deleted_media": setSaveDeletedMediaEnabled(enabled); return true;
+            case "save_secret_media": setSaveSecretMediaEnabled(enabled); return true;
+            case "allow_secret_screenshots": setAllowScreenshotsInSecretMedia(enabled); return true;
+            case "hide_sponsored": setHideSponsoredEnabled(enabled); return true;
+            case "ai_enabled": setAiEnabled(enabled); return true;
+            case "ai_read_chat": setAiAgentReadChatEnabled(enabled); return true;
+            case "ai_send_messages": setAiAgentSendMessagesEnabled(enabled); return true;
+            case "ai_smart_replies": setAiAgentSmartRepliesEnabled(enabled); return true;
+            case "ai_voice_transcription": setAiVoiceTranscriptionEnabled(enabled); return true;
+            case "enhanced_player": setEnhancedPlayerEnabled(enabled); return true;
+            case "equalizer": setEqualizerEnabled(enabled); return true;
+            case "spotify_player": setSpotifyPlayerEnabled(enabled); return true;
+            case "spotify_dynamic_color": setSpotifyDynamicColorEnabled(enabled); return true;
+            case "profile_v2": setProfileV2Enabled(enabled); return true;
+            case "hide_stories": setHideStoriesEnabled(enabled); return true;
+            case "confirm_voice_call": setConfirmVoiceCallEnabled(enabled); return true;
+            case "auto_check_updates": setAutoCheckUpdatesEnabled(enabled); return true;
+            default: return false;
         }
     }
 }

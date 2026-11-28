@@ -9069,6 +9069,14 @@ public class ChatActivity extends BaseFragment implements
                     .create());
             return;
         }
+        if (!org.telegram.messenger.yumigram.YumiConfig.isAiAgentReadChatEnabled()) {
+            showDialog(new AlertDialog.Builder(getParentActivity(), getResourceProvider())
+                    .setTitle("Доступ до чатів вимкнено")
+                    .setMessage("Увімкніть дозвіл «Читання чатів» у налаштуваннях Yumigram, щоб створити підсумок.")
+                    .setPositiveButton(LocaleController.getString(R.string.OK), null)
+                    .create());
+            return;
+        }
         AlertDialog progress = new AlertDialog(getParentActivity(), AlertDialog.ALERT_TYPE_SPINNER, themeDelegate);
         progress.setMessage("ШІ аналізує останні повідомлення...");
         progress.setCanceledOnTouchOutside(false);

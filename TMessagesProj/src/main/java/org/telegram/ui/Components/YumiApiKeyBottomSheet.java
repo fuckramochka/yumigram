@@ -66,7 +66,7 @@ public class YumiApiKeyBottomSheet extends BottomSheet {
 
         // Subtitle
         TextView descView = new TextView(context);
-        descView.setText("Enter your Gemini API key to activate Cloud models (3.5 / 3.1 Flash Lite).");
+        descView.setText("Enter your Gemini API key to use Gemini cloud models. Choose the model in AI settings.");
         descView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13);
         descView.setTextColor(Theme.getColor(Theme.key_dialogTextGray2));
         descView.setGravity(Gravity.CENTER);
