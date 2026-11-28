@@ -59,6 +59,7 @@ import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.BulletinFactory;
 import org.telegram.ui.Components.LayoutHelper;
+import org.telegram.ui.Components.YumiAgentConfirmationSheet;
 import org.telegram.ui.Components.YumiAgentTheme;
 
 import java.io.BufferedReader;
@@ -1475,7 +1476,7 @@ public class YumiAiCopilotActivity extends BaseFragment {
                 }
                 TLRPC.UserFull userFull = org.telegram.messenger.MessagesController.getInstance(account).getUserFull(userId);
                 completeThinkingEntry(thinkingEntry, thinkingPos, "Запускаю звонок для «" + targetName + "».");
-                org.telegram.messenger.voip.VoIPHelper.startCall(user, video, userFull != null && userFull.video_calls_available,
+                org.telegram.ui.Components.voip.VoIPHelper.startCall(user, video, userFull != null && userFull.video_calls_available,
                         getParentActivity(), userFull, org.telegram.messenger.AccountInstance.getInstance(account));
             }
 
