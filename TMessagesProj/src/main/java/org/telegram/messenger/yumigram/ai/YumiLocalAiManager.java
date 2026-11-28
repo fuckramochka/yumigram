@@ -298,6 +298,10 @@ public class YumiLocalAiManager {
      * Runs prompt inference locally on device.
      */
     public static void inferLocal(String modelId, String prompt, YumiAiManager.AiCallback callback) {
+        inferLocal(modelId, prompt, "You are Yumi Copilot, an assistant inside the Yumigram Telegram client. Follow the user request and return a concise, useful answer.", callback);
+    }
+
+    public static void inferLocal(String modelId, String prompt, String systemPrompt, YumiAiManager.AiCallback callback) {
         if (!isLocalInferenceSupported()) {
             if (callback != null) mainHandler.post(() -> callback.onError("Локальная модель недоступна в этой ABI-сборке. Используй облачный режим или установи arm64-вариант."));
             return;
@@ -309,7 +313,7 @@ public class YumiLocalAiManager {
         File modelFile = getModelFile(modelId);
         FileLog.d(TAG + ": Running on-device inference with " + modelFile.getName());
         try {
-            YumiLocalInference.infer(modelFile.getAbsolutePath(), prompt, (result, error) -> {
+            YumiLocalInference.infer(modelFile.getAbsolutePath(), prompt, systemPrompt, (result, error) -> {
                 if (callback == null) return;
                 if (error != null) callback.onError("Помилка локального ШІ: " + error);
                 else callback.onSuccess(result == null ? "" : result.trim());

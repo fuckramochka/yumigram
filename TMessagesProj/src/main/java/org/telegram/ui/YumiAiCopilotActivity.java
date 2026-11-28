@@ -32,6 +32,7 @@ import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.ScrollView;
@@ -306,22 +307,34 @@ public class YumiAiCopilotActivity extends BaseFragment {
         panel.setGravity(Gravity.CENTER_HORIZONTAL);
         panel.setPadding(dp(8), dp(12), dp(8), dp(12));
 
+        TextView eyebrow = new TextView(context);
+        eyebrow.setText("YUMI  ·  AI AGENT");
+        eyebrow.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 11);
+        eyebrow.setLetterSpacing(.08f);
+        eyebrow.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
+        eyebrow.setTextColor(YumiAgentTheme.colors().accent);
+        eyebrow.setGravity(Gravity.CENTER);
+        eyebrow.setPadding(dp(13), dp(7), dp(13), dp(7));
+        eyebrow.setBackground(agentSurface(YumiAgentTheme.colors().accentSoft, dp(18), YumiAgentTheme.colors().outline));
+        panel.addView(eyebrow, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 0, 0, 0, 17));
+
         FrameLayout orb = new FrameLayout(context);
         GradientDrawable orbBackground = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
                 new int[]{YumiAgentTheme.colors().accent, YumiAgentTheme.colors().accentSoft, YumiAgentTheme.colors().surface});
         orbBackground.setShape(GradientDrawable.OVAL);
         orb.setBackground(orbBackground);
+        orb.setElevation(dp(7));
         TextView glyph = new TextView(context);
         glyph.setText("✦");
         glyph.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 32);
         glyph.setTextColor(Color.WHITE);
         glyph.setGravity(Gravity.CENTER);
         orb.addView(glyph, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
-        panel.addView(orb, LayoutHelper.createLinear(76, 76, Gravity.CENTER_HORIZONTAL, 0, 0, 0, 20));
+        panel.addView(orb, LayoutHelper.createLinear(84, 84, Gravity.CENTER_HORIZONTAL, 0, 0, 0, 20));
 
         TextView title = new TextView(context);
         title.setText(YumiLocale.getString(R.string.YumiAiWelcomeTitle));
-        title.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 25);
+        title.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 27);
         title.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
         title.setTextColor(YumiAgentTheme.colors().primaryText);
         title.setGravity(Gravity.CENTER);
@@ -2057,12 +2070,15 @@ public class YumiAiCopilotActivity extends BaseFragment {
 
     private String buildConversationContext() {
         StringBuilder context = new StringBuilder();
-        int start = Math.max(0, messages.size() - 16);
-        for (int i = start; i < messages.size(); i++) {
+        // The last entry is the new user prompt, which is sent separately to the model.
+        int end = Math.max(0, messages.size() - 1);
+        int start = Math.max(0, end - 10);
+        for (int i = start; i < end; i++) {
             ChatEntry entry = messages.get(i);
             if (entry.isThinking || TextUtils.isEmpty(entry.text)) continue;
-            context.append(entry.isAi ? "Yumi: " : "User: ").append(entry.text).append('\n');
-            if (context.length() >= 8000) break;
+            String text = entry.text.length() > 700 ? entry.text.substring(0, 697) + "…" : entry.text;
+            context.append(entry.isAi ? "Yumi: " : "User: ").append(text).append('\n');
+            if (context.length() >= 3600) break;
         }
         return context.toString();
     }
@@ -2428,6 +2444,10 @@ public class YumiAiCopilotActivity extends BaseFragment {
             frame.setPadding(dp(18), dp(5), dp(18), dp(5));
             LinearLayout column = new LinearLayout(parent.getContext());
             column.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout labelRow = new LinearLayout(parent.getContext());
+            labelRow.setOrientation(LinearLayout.HORIZONTAL);
+            labelRow.setGravity(Gravity.CENTER_VERTICAL);
+            labelRow.setPadding(dp(2), 0, 0, dp(5));
             TextView textView = new TextView(parent.getContext());
             textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
             textView.setLineSpacing(dp(3), 1.02f);
@@ -2436,11 +2456,15 @@ public class YumiAiCopilotActivity extends BaseFragment {
             label.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12);
             label.setTextColor(YumiAgentTheme.colors().accent);
             label.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
-            label.setPadding(dp(2), 0, 0, dp(4));
-            column.addView(label, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+            ProgressBar progress = new ProgressBar(parent.getContext(), null, android.R.attr.progressBarStyleSmall);
+            progress.setIndeterminate(true);
+            progress.setIndeterminateTintList(android.content.res.ColorStateList.valueOf(YumiAgentTheme.colors().accent));
+            labelRow.addView(progress, LayoutHelper.createLinear(16, 16, Gravity.CENTER_VERTICAL, 0, 0, 7, 0));
+            labelRow.addView(label, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL));
+            column.addView(labelRow, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
             column.addView(textView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT));
             frame.addView(column, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
-            return new ChatViewHolder(frame, textView, label, column);
+            return new ChatViewHolder(frame, textView, label, progress, column);
         }
 
         @Override
@@ -2458,18 +2482,17 @@ public class YumiAiCopilotActivity extends BaseFragment {
             if (entry.isAi) {
                 columnLp.gravity = Gravity.LEFT;
                 holder.label.setVisibility(View.VISIBLE);
+                holder.progress.setVisibility(entry.isThinking ? View.VISIBLE : View.GONE);
                 holder.label.setText("✦  " + YumiLocale.getString(entry.isThinking ? R.string.YumiAiAssistantWorking : R.string.YumiAiAssistantLabel));
                 holder.textView.setTextColor(colors.primaryText);
                 holder.textView.setBackground(agentSurface(colors.surface, dp(17), entry.isThinking ? colors.accentSoft : colors.outline));
                 holder.textView.setPadding(dp(14), dp(12), dp(14), dp(12));
                 textLp.width = ViewGroup.LayoutParams.MATCH_PARENT;
                 holder.column.setPadding(dp(2), dp(2), dp(20), dp(2));
-                if (entry.isThinking) {
-                    holder.textView.setCompoundDrawablePadding(dp(8));
-                }
             } else {
                 columnLp.gravity = Gravity.RIGHT;
                 holder.label.setVisibility(View.GONE);
+                holder.progress.setVisibility(View.GONE);
                 holder.textView.setTextColor(colors.userText);
                 holder.textView.setBackground(agentSurface(colors.userBubble, dp(20), Color.TRANSPARENT));
                 holder.textView.setPadding(dp(15), dp(10), dp(15), dp(10));
@@ -2575,11 +2598,13 @@ public class YumiAiCopilotActivity extends BaseFragment {
     private static class ChatViewHolder extends RecyclerView.ViewHolder {
         public final TextView textView;
         public final TextView label;
+        public final ProgressBar progress;
         public final LinearLayout column;
-        public ChatViewHolder(View itemView, TextView textView, TextView label, LinearLayout column) {
+        public ChatViewHolder(View itemView, TextView textView, TextView label, ProgressBar progress, LinearLayout column) {
             super(itemView);
             this.textView = textView;
             this.label = label;
+            this.progress = progress;
             this.column = column;
         }
     }

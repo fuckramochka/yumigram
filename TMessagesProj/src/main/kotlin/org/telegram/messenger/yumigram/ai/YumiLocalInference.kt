@@ -25,6 +25,11 @@ object YumiLocalInference {
 
     @JvmStatic
     fun infer(modelPath: String, prompt: String, callback: BiConsumer<String?, String?>) {
+        infer(modelPath, prompt, "You are Yumi Copilot, an assistant inside the Yumigram Telegram client. Follow the user request and return a concise, useful answer.", callback)
+    }
+
+    @JvmStatic
+    fun infer(modelPath: String, prompt: String, systemPrompt: String, callback: BiConsumer<String?, String?>) {
         scope.launch {
             try {
                 val answer = mutex.withLock {
@@ -46,7 +51,7 @@ object YumiLocalInference {
                     val result = Llama.complete(
                         model = model,
                         prompt = prompt,
-                        systemPrompt = "You are Yumi Copilot, an assistant inside the Yumigram Telegram client. Follow the instructions in the user prompt and return a concise, useful answer.",
+                        systemPrompt = systemPrompt,
                         maxTokens = 512
                     )
                     scheduleIdleRelease()

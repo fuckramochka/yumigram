@@ -33,6 +33,8 @@ public class YumiAiManager {
     private static final long MAX_AI_TRANSCRIPTION_BYTES = 10L * 1024L * 1024L;
     private static final Handler mainHandler = new Handler(Looper.getMainLooper());
     private static final DispatchQueue2 aiNetworkQueue = new DispatchQueue2("yumiAiNetwork");
+    private static final DispatchQueue2 aiRequestQueue = new DispatchQueue2("yumiAiRequests");
+    private static final DispatchQueue2 aiAgentQueue = new DispatchQueue2("yumiAiAgent");
 
     public interface AiCallback {
         void onSuccess(String result);
@@ -370,15 +372,15 @@ public class YumiAiManager {
         }
     }
 
-    public static void requestAgentAi(String prompt, JSONArray functionDeclarations, AiCallback callback) {
+    public static void requestAgentAi(String prompt, String instructions, JSONArray functionDeclarations, AiCallback callback) {
         if (!YumiConfig.isAiEnabled()) {
             notifyError(callback, "AI выключен в настройках Yumigram.");
             return;
         }
         if (YumiConfig.isLocalAi()) {
-            YumiLocalAiManager.inferLocal(YumiConfig.getAiLocalModelId(), prompt, callback);
+            YumiLocalAiManager.inferLocal(YumiConfig.getAiLocalModelId(), prompt, instructions, callback);
         } else {
-            requestAiInternal(prompt, null, null, callback, functionDeclarations);
+            requestAiInternal(instructions + "\n\nUser request: " + prompt, null, null, callback, functionDeclarations);
         }
     }
 
@@ -391,7 +393,8 @@ public class YumiAiManager {
     }
 
     private static void requestAiInternal(String prompt, String base64Data, String mimeType, String fileUri, AiCallback callback, JSONArray functionDeclarations) {
-        aiNetworkQueue.postRunnable(() -> {
+        DispatchQueue2 requestQueue = functionDeclarations == null ? aiRequestQueue : aiAgentQueue;
+        requestQueue.postRunnable(() -> {
             String apiKey = YumiConfig.getAiApiKey();
             if (TextUtils.isEmpty(apiKey)) {
                 notifyError(callback, "Вкажіть API-ключ Gemini у Налаштуваннях Юмиграм");
@@ -400,18 +403,20 @@ public class YumiAiManager {
 
             String primaryModel = YumiConfig.getAiPrimaryModel();
             String fallbackModel = YumiConfig.getAiFallbackModel();
+            boolean hasFallback = !TextUtils.isEmpty(fallbackModel) && !fallbackModel.equals(primaryModel);
 
-            // Try primary model first
-            boolean success = tryModel(primaryModel, apiKey, prompt, base64Data, mimeType, fileUri, callback, functionDeclarations, false);
-            if (!success && !TextUtils.isEmpty(fallbackModel) && !fallbackModel.equals(primaryModel)) {
+            boolean[] retryAllowed = new boolean[1];
+            boolean success = tryModel(primaryModel, apiKey, prompt, base64Data, mimeType, fileUri, callback, functionDeclarations, !hasFallback, retryAllowed);
+            if (!success && retryAllowed[0] && hasFallback) {
                 FileLog.d(TAG + ": Primary model " + primaryModel + " failed. Falling back to " + fallbackModel);
-                tryModel(fallbackModel, apiKey, prompt, base64Data, mimeType, fileUri, callback, functionDeclarations, true);
+                tryModel(fallbackModel, apiKey, prompt, base64Data, mimeType, fileUri, callback, functionDeclarations, true, new boolean[1]);
             }
         });
     }
 
-    private static boolean tryModel(String model, String apiKey, String prompt, String base64Data, String mimeType, String fileUri, AiCallback callback, JSONArray functionDeclarations, boolean isFinalAttempt) {
+    private static boolean tryModel(String model, String apiKey, String prompt, String base64Data, String mimeType, String fileUri, AiCallback callback, JSONArray functionDeclarations, boolean isFinalAttempt, boolean[] retryAllowed) {
         HttpURLConnection conn = null;
+        long startedAt = System.currentTimeMillis();
         try {
             String endpoint = "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent";
             URL url = new URL(endpoint);
@@ -419,8 +424,8 @@ public class YumiAiManager {
             conn.setRequestMethod("POST");
             conn.setRequestProperty("Content-Type", "application/json");
             conn.setRequestProperty("x-goog-api-key", apiKey);
-            conn.setConnectTimeout(20000);
-            conn.setReadTimeout(90000);
+            conn.setConnectTimeout(12000);
+            conn.setReadTimeout(45000);
             conn.setDoOutput(true);
 
             JSONObject payload = new JSONObject();
@@ -451,6 +456,14 @@ public class YumiAiManager {
             contentItem.put("parts", parts);
             contents.put(contentItem);
             payload.put("contents", contents);
+            if (functionDeclarations != null && functionDeclarations.length() > 0) {
+                JSONObject generationConfig = new JSONObject();
+                generationConfig.put("maxOutputTokens", 1024);
+                JSONObject thinkingConfig = new JSONObject();
+                thinkingConfig.put("thinkingLevel", "minimal");
+                generationConfig.put("thinkingConfig", thinkingConfig);
+                payload.put("generationConfig", generationConfig);
+            }
             if (functionDeclarations != null && functionDeclarations.length() > 0) {
                 JSONObject tool = new JSONObject();
                 tool.put("functionDeclarations", functionDeclarations);
@@ -504,6 +517,7 @@ public class YumiAiManager {
                                         }
                                     }
                                     notifySuccess(callback, action.toString());
+                                    FileLog.d(TAG + ": Agent request completed with " + model + " in " + (System.currentTimeMillis() - startedAt) + "ms");
                                     return true;
                                 }
                             }
@@ -512,27 +526,28 @@ public class YumiAiManager {
                                 String resultText = responsePart.optString("text");
                                 if (!TextUtils.isEmpty(resultText.trim())) {
                                     notifySuccess(callback, resultText.trim());
+                                    FileLog.d(TAG + ": Agent request completed with " + model + " in " + (System.currentTimeMillis() - startedAt) + "ms");
                                     return true;
                                 }
                             }
                         }
                     }
                 }
-                if (isFinalAttempt) {
-                    notifyError(callback, "Порожня відповідь від моделі " + model);
-                }
+                notifyError(callback, "Порожня відповідь від моделі " + model);
                 return false;
             } else {
                 String errorDetail = readErrorDetail(conn);
                 FileLog.e(TAG + ": Model " + model + " returned HTTP " + code + (TextUtils.isEmpty(errorDetail) ? "" : ": " + errorDetail));
-                if (isFinalAttempt) {
+                retryAllowed[0] = code == 408 || code == 429 || code >= 500;
+                if (isFinalAttempt || !retryAllowed[0]) {
                     notifyError(callback, "Помилка ШІ (" + model + "): HTTP " + code + (TextUtils.isEmpty(errorDetail) ? "" : " — " + errorDetail));
                 }
                 return false;
             }
         } catch (Exception e) {
             FileLog.e(TAG, e);
-            if (isFinalAttempt) {
+            retryAllowed[0] = e instanceof java.io.IOException;
+            if (isFinalAttempt || !retryAllowed[0]) {
                 notifyError(callback, "Помилка зв'язку (" + model + "): " + e.getLocalizedMessage());
             }
             return false;

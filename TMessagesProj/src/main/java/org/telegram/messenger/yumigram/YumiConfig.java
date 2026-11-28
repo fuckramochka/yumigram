@@ -60,8 +60,8 @@ public class YumiConfig {
     public static final String KEY_AI_LOCAL_MODEL_ID = "yumi_ai_local_model_id";
     public static final String KEY_AI_SUMMARIZE_LIMIT = "yumi_ai_summarize_limit";
 
-    public static final String DEFAULT_PRIMARY_MODEL = "gemini-3.8-flash";
-    public static final String DEFAULT_FALLBACK_MODEL = "gemini-3.5-flash-lite";
+    public static final String DEFAULT_PRIMARY_MODEL = "gemini-3.5-flash-lite";
+    public static final String DEFAULT_FALLBACK_MODEL = "gemini-3.5-flash";
 
     public static final String[] CLOUD_MODELS = new String[] {
             "gemini-3.8-flash",
